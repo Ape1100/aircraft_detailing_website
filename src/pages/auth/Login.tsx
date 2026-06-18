@@ -4,13 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { BrandBackdrop } from "@/components/layout/BrandBackdrop";
 import { BrandLogo } from "@/components/layout/BrandLogo";
+import { useSettings } from "@/lib/settings-store";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { businessSettings } = useSettings();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-ink px-6 py-16">
+    <BrandBackdrop background={businessSettings.background} className="flex min-h-screen items-center justify-center px-6 py-16">
       <Card className="w-full max-w-md">
         <CardHeader>
           <Link to="/">
@@ -78,6 +81,6 @@ export default function Login() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
+    </BrandBackdrop>
   );
 }

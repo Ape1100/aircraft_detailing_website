@@ -2,17 +2,39 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type {
   AircraftCategory,
   AircraftCondition,
+  BackgroundSettings,
+  BusinessAddress,
   BusinessSettings,
   CustomQuote,
   DiscountRule,
+  GalleryPhotoPair,
+  GallerySettings,
   InvoiceSettings,
   MembershipTier,
+  OnboardingState,
   PricingConfig,
   ServiceDefinition,
 } from "@/types";
 import { DEFAULT_DISCOUNT_RULES, DEFAULT_PRICING_CONFIG, DEFAULT_SERVICES } from "@/lib/pricing-engine";
 
-const STORAGE_KEY = "brightwork-settings-v1";
+const STORAGE_KEY = "brightwork-settings-v2";
+
+export const DEFAULT_BACKGROUND: BackgroundSettings = {
+  mode: "solid",
+  solidColorHex: "#1a1f2e",
+  sampleId: "runway-golden-hour",
+  customDataUrl: null,
+};
+
+export const DEFAULT_GALLERY: GallerySettings = {
+  enabled: false,
+  photos: [],
+};
+
+export const DEFAULT_ONBOARDING: OnboardingState = {
+  setupCompleted: false,
+  tourDismissed: false,
+};
 
 export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   companyName: "Brightwork",
@@ -22,6 +44,10 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   contactPhone: "(916) 555-0148",
   serviceArea: "Mobile service — CA Central Valley & Bay Area",
   accentColorHex: "#E8A33D",
+  entityType: "sole_proprietorship",
+  address: { street: "", city: "", state: "", zip: "" },
+  aboutUs: "",
+  background: DEFAULT_BACKGROUND,
   customDisclaimerNote: "",
   invoice: {
     invoicePrefix: "BW",
@@ -39,20 +65,34 @@ interface SettingsState {
   pricingConfig: PricingConfig;
   discountRules: DiscountRule[];
   customQuotes: CustomQuote[];
+  gallery: GallerySettings;
+  onboarding: OnboardingState;
+}
+
+function mergeBusinessSettings(partial?: Partial<BusinessSettings>): BusinessSettings {
+  const base = { ...DEFAULT_BUSINESS_SETTINGS, ...partial };
+  return {
+    ...base,
+    address: { ...DEFAULT_BUSINESS_SETTINGS.address, ...partial?.address },
+    background: { ...DEFAULT_BACKGROUND, ...partial?.background },
+    invoice: { ...DEFAULT_BUSINESS_SETTINGS.invoice, ...partial?.invoice },
+  };
 }
 
 function loadInitialState(): SettingsState {
   if (typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem("brightwork-settings-v1");
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<SettingsState>;
         return {
-          businessSettings: { ...DEFAULT_BUSINESS_SETTINGS, ...parsed.businessSettings },
+          businessSettings: mergeBusinessSettings(parsed.businessSettings),
           services: parsed.services?.length ? parsed.services : DEFAULT_SERVICES,
           pricingConfig: { ...DEFAULT_PRICING_CONFIG, ...parsed.pricingConfig },
           discountRules: parsed.discountRules ?? DEFAULT_DISCOUNT_RULES,
           customQuotes: parsed.customQuotes ?? [],
+          gallery: { ...DEFAULT_GALLERY, ...parsed.gallery, photos: parsed.gallery?.photos ?? [] },
+          onboarding: { ...DEFAULT_ONBOARDING, ...parsed.onboarding },
         };
       }
     } catch {
@@ -65,6 +105,8 @@ function loadInitialState(): SettingsState {
     pricingConfig: DEFAULT_PRICING_CONFIG,
     discountRules: DEFAULT_DISCOUNT_RULES,
     customQuotes: [],
+    gallery: DEFAULT_GALLERY,
+    onboarding: DEFAULT_ONBOARDING,
   };
 }
 
@@ -79,6 +121,8 @@ function slugify(name: string): string {
 interface SettingsContextValue extends SettingsState {
   updateBusinessSettings: (patch: Partial<BusinessSettings>) => void;
   updateInvoiceSettings: (patch: Partial<InvoiceSettings>) => void;
+  updateAddress: (patch: Partial<BusinessAddress>) => void;
+  updateBackground: (patch: Partial<BackgroundSettings>) => void;
 
   addService: (service: Omit<ServiceDefinition, "code">) => void;
   updateService: (code: string, patch: Partial<ServiceDefinition>) => void;
@@ -97,6 +141,15 @@ interface SettingsContextValue extends SettingsState {
 
   addCustomQuote: (quote: Omit<CustomQuote, "id" | "createdAt">) => CustomQuote;
   updateCustomQuoteStatus: (id: string, status: CustomQuote["status"]) => void;
+
+  setGalleryEnabled: (enabled: boolean) => void;
+  addGalleryPhoto: (photo: Omit<GalleryPhotoPair, "id">) => void;
+  updateGalleryPhoto: (id: string, patch: Partial<GalleryPhotoPair>) => void;
+  removeGalleryPhoto: (id: string) => void;
+
+  completeSetup: () => void;
+  dismissSetupTour: () => void;
+  resetOnboarding: () => void;
 
   resetToDefaults: () => void;
 }
@@ -120,12 +173,33 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       ...state,
 
       updateBusinessSettings: (patch) =>
-        setState((s) => ({ ...s, businessSettings: { ...s.businessSettings, ...patch } })),
+        setState((s) => ({ ...s, businessSettings: mergeBusinessSettings({ ...s.businessSettings, ...patch }) })),
 
       updateInvoiceSettings: (patch) =>
         setState((s) => ({
           ...s,
-          businessSettings: { ...s.businessSettings, invoice: { ...s.businessSettings.invoice, ...patch } },
+          businessSettings: mergeBusinessSettings({
+            ...s.businessSettings,
+            invoice: { ...s.businessSettings.invoice, ...patch },
+          }),
+        })),
+
+      updateAddress: (patch) =>
+        setState((s) => ({
+          ...s,
+          businessSettings: mergeBusinessSettings({
+            ...s.businessSettings,
+            address: { ...s.businessSettings.address, ...patch },
+          }),
+        })),
+
+      updateBackground: (patch) =>
+        setState((s) => ({
+          ...s,
+          businessSettings: mergeBusinessSettings({
+            ...s.businessSettings,
+            background: { ...s.businessSettings.background, ...patch },
+          }),
         })),
 
       addService: (service) =>
@@ -219,6 +293,48 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           customQuotes: s.customQuotes.map((q) => (q.id === id ? { ...q, status } : q)),
         })),
 
+      setGalleryEnabled: (enabled) =>
+        setState((s) => ({ ...s, gallery: { ...s.gallery, enabled } })),
+
+      addGalleryPhoto: (photo) =>
+        setState((s) => ({
+          ...s,
+          gallery: { ...s.gallery, photos: [...s.gallery.photos, { ...photo, id: crypto.randomUUID() }] },
+        })),
+
+      updateGalleryPhoto: (id, patch) =>
+        setState((s) => ({
+          ...s,
+          gallery: {
+            ...s.gallery,
+            photos: s.gallery.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+          },
+        })),
+
+      removeGalleryPhoto: (id) =>
+        setState((s) => ({
+          ...s,
+          gallery: { ...s.gallery, photos: s.gallery.photos.filter((p) => p.id !== id) },
+        })),
+
+      completeSetup: () =>
+        setState((s) => ({
+          ...s,
+          onboarding: { setupCompleted: true, tourDismissed: true },
+        })),
+
+      dismissSetupTour: () =>
+        setState((s) => ({
+          ...s,
+          onboarding: { ...s.onboarding, tourDismissed: true },
+        })),
+
+      resetOnboarding: () =>
+        setState((s) => ({
+          ...s,
+          onboarding: DEFAULT_ONBOARDING,
+        })),
+
       resetToDefaults: () =>
         setState({
           businessSettings: DEFAULT_BUSINESS_SETTINGS,
@@ -226,6 +342,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           pricingConfig: DEFAULT_PRICING_CONFIG,
           discountRules: DEFAULT_DISCOUNT_RULES,
           customQuotes: [],
+          gallery: DEFAULT_GALLERY,
+          onboarding: DEFAULT_ONBOARDING,
         }),
     }),
     [state]

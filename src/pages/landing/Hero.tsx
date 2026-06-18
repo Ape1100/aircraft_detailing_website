@@ -2,13 +2,14 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NNumberPlate } from "@/components/aviation/NNumberPlate";
+import { BrandBackdrop } from "@/components/layout/BrandBackdrop";
 import { useSettings } from "@/lib/settings-store";
 
 export function Hero() {
   const { businessSettings } = useSettings();
 
   return (
-    <section className="relative overflow-hidden bg-ink pb-24 pt-36">
+    <BrandBackdrop background={businessSettings.background} className="relative bg-ink pb-24 pt-36">
       <div
         className="pointer-events-none absolute inset-0 opacity-40"
         style={{
@@ -64,6 +65,6 @@ export function Hero() {
           </div>
         </div>
       </div>
-    </section>
+    </BrandBackdrop>
   );
 }

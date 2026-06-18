@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "#services", label: "Services" },
   { href: "#pricing", label: "Pricing" },
   { href: "#membership", label: "Membership" },
+  { href: "/about", label: "About", isRoute: true },
   { href: "#faq", label: "FAQ" },
 ];
 
@@ -35,15 +36,17 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-7 md:flex">
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-aluminum hover:text-paper"
-            >
-              {link.label}
-            </a>
-          ))}
+          {NAV_LINKS.map((link) =>
+            link.isRoute ? (
+              <Link key={link.href} to={link.href} className="text-sm font-medium text-aluminum hover:text-paper">
+                {link.label}
+              </Link>
+            ) : (
+              <a key={link.href} href={link.href} className="text-sm font-medium text-aluminum hover:text-paper">
+                {link.label}
+              </a>
+            )
+          )}
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
@@ -67,16 +70,27 @@ export function SiteHeader() {
       {open && (
         <div className="border-t border-white/10 bg-ink px-6 py-4 md:hidden">
           <nav className="flex flex-col gap-4">
-            {NAV_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className="text-sm font-medium text-aluminum hover:text-paper"
-              >
-                {link.label}
-              </a>
-            ))}
+            {NAV_LINKS.map((link) =>
+              link.isRoute ? (
+                <Link
+                  key={link.href}
+                  to={link.href}
+                  onClick={() => setOpen(false)}
+                  className="text-sm font-medium text-aluminum hover:text-paper"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setOpen(false)}
+                  className="text-sm font-medium text-aluminum hover:text-paper"
+                >
+                  {link.label}
+                </a>
+              )
+            )}
             <div className="flex flex-col gap-2 pt-2">
               <Button asChild variant="outline" className="border-white/20 text-paper">
                 <Link to="/login">Client Login</Link>

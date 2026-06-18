@@ -1,5 +1,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
-import { ImagePlus, RotateCcw, Trash2 } from "lucide-react";
+import { ImagePlus, RotateCcw, Trash2, Wand2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { BackgroundPicker } from "@/components/admin/BackgroundPicker";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +10,14 @@ import { Button } from "@/components/ui/button";
 import { useSettings } from "@/lib/settings-store";
 
 export default function AdminSettings() {
-  const { businessSettings, updateBusinessSettings, updateInvoiceSettings, resetToDefaults } = useSettings();
+  const {
+    businessSettings,
+    updateBusinessSettings,
+    updateInvoiceSettings,
+    updateAddress,
+    updateBackground,
+    resetToDefaults,
+  } = useSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saved, setSaved] = useState(false);
 
@@ -37,7 +46,14 @@ export default function AdminSettings() {
             automatically as you type.
           </p>
         </div>
-        {saved && <span className="text-sm text-navgreen">Saved</span>}
+        <div className="flex items-center gap-2">
+          {saved && <span className="text-sm text-navgreen">Saved</span>}
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/setup">
+              <Wand2 className="h-4 w-4" /> Re-run setup wizard
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -141,6 +157,89 @@ export default function AdminSettings() {
               onChange={(e) => updateBusinessSettings({ serviceArea: e.target.value })}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Business profile</CardTitle>
+          <CardDescription>Entity type, address, and About Us content for your public profile.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div>
+            <Label>Business type</Label>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {(
+                [
+                  { value: "sole_proprietorship", label: "Sole proprietorship" },
+                  { value: "corporation", label: "Corporation / LLC" },
+                ] as const
+              ).map(({ value, label }) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={businessSettings.entityType === value ? "default" : "outline"}
+                  onClick={() => updateBusinessSettings({ entityType: value })}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="bs-street">Street address</Label>
+              <Input
+                id="bs-street"
+                value={businessSettings.address.street}
+                onChange={(e) => updateAddress({ street: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="bs-city">City</Label>
+              <Input
+                id="bs-city"
+                value={businessSettings.address.city}
+                onChange={(e) => updateAddress({ city: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="bs-state">State</Label>
+              <Input
+                id="bs-state"
+                value={businessSettings.address.state}
+                onChange={(e) => updateAddress({ state: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="bs-zip">ZIP</Label>
+              <Input
+                id="bs-zip"
+                value={businessSettings.address.zip}
+                onChange={(e) => updateAddress({ zip: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="bs-about">About us</Label>
+            <Textarea
+              id="bs-about"
+              rows={4}
+              value={businessSettings.aboutUs}
+              onChange={(e) => updateBusinessSettings({ aboutUs: e.target.value })}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Site background</CardTitle>
+          <CardDescription>Applied to the homepage hero, login/signup, and About page.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BackgroundPicker value={businessSettings.background} onChange={updateBackground} />
         </CardContent>
       </Card>
 

@@ -192,6 +192,41 @@ export interface ClientProfile {
 // White-label business customization
 // ---------------------------------------------------------------------
 
+export type BusinessEntityType = "sole_proprietorship" | "corporation";
+
+export interface BusinessAddress {
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
+export type BackgroundMode = "solid" | "sample" | "custom";
+
+export interface BackgroundSettings {
+  mode: BackgroundMode;
+  solidColorHex: string;
+  sampleId: string | null;
+  customDataUrl: string | null;
+}
+
+export interface GalleryPhotoPair {
+  id: string;
+  label: string;
+  beforeDataUrl: string;
+  afterDataUrl: string;
+}
+
+export interface GallerySettings {
+  enabled: boolean;
+  photos: GalleryPhotoPair[];
+}
+
+export interface OnboardingState {
+  setupCompleted: boolean;
+  tourDismissed: boolean;
+}
+
 export interface InvoiceSettings {
   invoicePrefix: string;
   taxRatePercent: number;
@@ -209,6 +244,10 @@ export interface BusinessSettings {
   contactPhone: string;
   serviceArea: string;
   accentColorHex: string;
+  entityType: BusinessEntityType;
+  address: BusinessAddress;
+  aboutUs: string;
+  background: BackgroundSettings;
   /** Optional supplemental note shown alongside the required compliance
    * disclaimers — it cannot replace them (see REQUIRED_REPORT_DISCLAIMER /
    * ESTIMATE_DISCLAIMER below, which every tenant must keep). */

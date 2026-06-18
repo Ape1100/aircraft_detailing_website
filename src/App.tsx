@@ -3,6 +3,7 @@ import {
   ClipboardList,
   FileSignature,
   FileText,
+  Images,
   LayoutDashboard,
   Plane,
   Receipt,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 
 import LandingPage from "@/pages/LandingPage";
+import AboutUs from "@/pages/landing/AboutUs";
 import Login from "@/pages/auth/Login";
 import Signup from "@/pages/auth/Signup";
 import EstimateWizard from "@/pages/wizard/EstimateWizard";
@@ -38,6 +40,8 @@ import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminPricingRules from "@/pages/admin/AdminPricingRules";
 import AdminDiscounts from "@/pages/admin/AdminDiscounts";
 import AdminCustomQuote from "@/pages/admin/AdminCustomQuote";
+import AdminGallery from "@/pages/admin/AdminGallery";
+import SetupWizard from "@/pages/admin/SetupWizard";
 
 const CLIENT_NAV: PortalNavItem[] = [
   { to: "/portal/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -55,6 +59,7 @@ const ADMIN_NAV: PortalNavItem[] = [
   { to: "/admin/custom-quote", label: "Custom Quote", icon: FileSignature },
   { to: "/admin/report-builder", label: "Report Builder", icon: FileText },
   { to: "/admin/services", label: "Services", icon: Wrench },
+  { to: "/admin/gallery", label: "Gallery", icon: Images },
   { to: "/admin/pricing-rules", label: "Pricing Rules", icon: SlidersHorizontal },
   { to: "/admin/discounts", label: "Discounts", icon: Tag },
   { to: "/admin/invoices", label: "Invoices", icon: Receipt },
@@ -73,9 +78,11 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/about" element={<AboutUs />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/estimate" element={<EstimateWizard />} />
+      <Route path="/admin/setup" element={<SetupWizard />} />
 
       <Route path="/portal" element={<ClientLayout />}>
         <Route path="dashboard" element={<ClientDashboard />} />
@@ -94,6 +101,7 @@ export default function App() {
         <Route path="custom-quote" element={<AdminCustomQuote />} />
         <Route path="report-builder" element={<AdminReportBuilder />} />
         <Route path="services" element={<AdminServices />} />
+        <Route path="gallery" element={<AdminGallery />} />
         <Route path="pricing-rules" element={<AdminPricingRules />} />
         <Route path="discounts" element={<AdminDiscounts />} />
         <Route path="invoices" element={<AdminInvoices />} />

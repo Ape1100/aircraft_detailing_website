@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Camera, Check, Plane, Save, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,10 @@ import { Progress } from "@/components/ui/progress";
 import { NNumberPlate } from "@/components/aviation/NNumberPlate";
 import { ConfidenceGauge } from "@/components/aviation/ConfidenceGauge";
 import { BrandLogo } from "@/components/layout/BrandLogo";
+import { OptionCard, StepShell } from "@/components/wizard/WizardChrome";
 import { calculateEstimate } from "@/lib/pricing-engine";
 import { useSettings } from "@/lib/settings-store";
-import { cn, formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import { ESTIMATE_DISCLAIMER, type AircraftCategory, type AircraftCondition, type EstimateInput } from "@/types";
 import { CATEGORY_OPTIONS, CONDITION_OPTIONS, MAKES, MODELS_BY_MAKE } from "@/pages/wizard/wizard-data";
 
@@ -413,46 +414,5 @@ export default function EstimateWizard() {
         </div>
       </main>
     </div>
-  );
-}
-
-function StepShell({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="mt-2">
-      <h1 className="font-display text-2xl font-semibold text-ink md:text-3xl">{title}</h1>
-      {subtitle && <p className="mt-1 text-sm text-steel">{subtitle}</p>}
-      <div className="mt-6">{children}</div>
-    </div>
-  );
-}
-
-function OptionCard({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex h-16 items-center justify-center rounded-lg border px-3 text-center text-sm font-medium transition-colors",
-        selected ? "border-amber bg-amber/10 text-amberDark" : "border-ink/15 bg-white text-ink hover:border-ink/30"
-      )}
-    >
-      {children}
-    </button>
   );
 }
