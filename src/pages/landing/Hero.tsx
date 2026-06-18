@@ -9,12 +9,17 @@ export function Hero() {
   const { businessSettings } = useSettings();
 
   return (
-    <BrandBackdrop background={businessSettings.background} className="relative bg-ink pb-24 pt-36">
+    <BrandBackdrop
+      background={businessSettings.background}
+      className="relative min-h-[92vh] bg-ink pb-24 pt-36"
+      imagePosition="62% center"
+      overlayClassName="bg-gradient-to-r from-ink/92 via-ink/72 to-ink/40"
+    >
       <div
-        className="pointer-events-none absolute inset-0 opacity-40"
+        className="pointer-events-none absolute inset-0 opacity-50"
         style={{
           background:
-            "radial-gradient(ellipse 60% 50% at 80% 0%, rgba(232,163,61,0.18), transparent)",
+            "radial-gradient(ellipse 55% 45% at 78% 35%, rgba(232,163,61,0.22), transparent 70%)",
         }}
       />
       <div className="relative mx-auto grid max-w-6xl gap-12 px-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
@@ -22,7 +27,7 @@ export function Hero() {
           <p className="mb-4 font-mono text-xs uppercase tracking-plate text-amber">
             Mobile Aircraft Detailing &amp; Documentation
           </p>
-          <h1 className="font-display text-4xl font-semibold leading-[1.05] text-paper text-balance md:text-6xl">
+          <h1 className="font-display text-4xl font-semibold leading-[1.05] text-paper text-balance drop-shadow-sm md:text-6xl">
             {businessSettings.tagline}
           </h1>
           <p className="mt-6 max-w-md text-balance text-base text-aluminum md:text-lg">
@@ -47,7 +52,7 @@ export function Hero() {
         </div>
 
         <div className="flex justify-center md:justify-end">
-          <div className="flex flex-col items-center gap-5 rounded-2xl border border-white/10 bg-white/[0.03] p-8 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-5 rounded-2xl border border-white/10 bg-white/[0.06] p-8 shadow-plate backdrop-blur-md">
             <p className="text-center text-xs uppercase tracking-wide text-aluminum/60">
               Every visit, documented
             </p>

@@ -3,7 +3,7 @@ import { ImagePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SAMPLE_BACKGROUNDS } from "@/lib/sample-backgrounds";
+import { SAMPLE_BACKGROUNDS, buildBackgroundUrl } from "@/lib/sample-backgrounds";
 import type { BackgroundSettings } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -73,8 +73,11 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
                 value.sampleId === sample.id ? "border-amber ring-2 ring-amber/30" : "border-ink/15 hover:border-ink/30"
               )}
             >
-              <img src={sample.url} alt={sample.label} className="h-24 w-full object-cover" />
+              <img src={buildBackgroundUrl(sample.photoPath)} alt={sample.label} className="h-24 w-full object-cover" />
               <p className="px-3 py-2 text-sm font-medium text-ink">{sample.label}</p>
+              {sample.description && (
+                <p className="px-3 pb-2 text-xs text-steel2">{sample.description}</p>
+              )}
             </button>
           ))}
         </div>

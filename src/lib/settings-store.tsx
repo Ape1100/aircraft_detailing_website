@@ -16,13 +16,14 @@ import type {
   ServiceDefinition,
 } from "@/types";
 import { DEFAULT_DISCOUNT_RULES, DEFAULT_PRICING_CONFIG, DEFAULT_SERVICES } from "@/lib/pricing-engine";
+import { DEFAULT_SAMPLE_ID } from "@/lib/sample-backgrounds";
 
 const STORAGE_KEY = "brightwork-settings-v2";
 
 export const DEFAULT_BACKGROUND: BackgroundSettings = {
-  mode: "solid",
+  mode: "sample",
   solidColorHex: "#1a1f2e",
-  sampleId: "runway-golden-hour",
+  sampleId: DEFAULT_SAMPLE_ID,
   customDataUrl: null,
 };
 
@@ -71,11 +72,29 @@ interface SettingsState {
 
 function mergeBusinessSettings(partial?: Partial<BusinessSettings>): BusinessSettings {
   const base = { ...DEFAULT_BUSINESS_SETTINGS, ...partial };
+  const background = migrateBackground({ ...DEFAULT_BACKGROUND, ...partial?.background });
   return {
     ...base,
     address: { ...DEFAULT_BUSINESS_SETTINGS.address, ...partial?.address },
-    background: { ...DEFAULT_BACKGROUND, ...partial?.background },
+    background,
     invoice: { ...DEFAULT_BUSINESS_SETTINGS.invoice, ...partial?.invoice },
+  };
+}
+
+/** Upgrade users still on the old solid-color factory default to the premium jet hero. */
+function migrateBackground(bg: BackgroundSettings): BackgroundSettings {
+  const isLegacySolidDefault =
+    bg.mode === "solid" &&
+    bg.solidColorHex === "#1a1f2e" &&
+    (bg.sampleId === "runway-golden-hour" || bg.sampleId === DEFAULT_SAMPLE_ID);
+
+  if (isLegacySolidDefault) {
+    return DEFAULT_BACKGROUND;
+  }
+
+  return {
+    ...DEFAULT_BACKGROUND,
+    ...bg,
   };
 }
 
