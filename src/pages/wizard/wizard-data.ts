@@ -1,0 +1,72 @@
+import type { AircraftCategory, AircraftCondition } from "@/types";
+
+export const CATEGORY_OPTIONS: { value: AircraftCategory; label: string }[] = [
+  { value: "piston_single", label: "Piston Single" },
+  { value: "piston_twin", label: "Piston Twin" },
+  { value: "turboprop", label: "Turboprop" },
+  { value: "light_jet", label: "Light Jet" },
+  { value: "mid_size_jet", label: "Mid-Size Jet" },
+  { value: "heavy_jet", label: "Heavy Jet" },
+  { value: "helicopter", label: "Helicopter" },
+  { value: "experimental", label: "Experimental" },
+  { value: "warbird", label: "Warbird" },
+  { value: "other", label: "Other" },
+];
+
+export const MAKES = [
+  "Cessna",
+  "Beechcraft",
+  "Piper",
+  "Cirrus",
+  "Diamond",
+  "Pilatus",
+  "TBM",
+  "Embraer",
+  "HondaJet",
+  "Learjet",
+  "Citation",
+  "Gulfstream",
+  "Dassault",
+  "Bombardier",
+  "Airbus Corporate",
+  "Boeing Business Jet",
+  "Bell",
+  "Robinson",
+  "Airbus Helicopters",
+  "Sikorsky",
+];
+
+export const MODELS_BY_MAKE: Record<string, string[]> = {
+  Cessna: ["150", "152", "172", "182", "206", "210", "Caravan", "Citation CJ1", "Citation CJ2", "Citation CJ3", "Citation XLS", "Citation Latitude"],
+  Beechcraft: ["Bonanza", "Baron", "King Air 200", "King Air 350", "Premier I"],
+  Piper: ["Cherokee", "Arrow", "Saratoga", "Seneca", "M350", "M600"],
+  Cirrus: ["SR20", "SR22", "SR22T", "Vision Jet"],
+  Diamond: ["DA40", "DA42", "DA62"],
+  Pilatus: ["PC-12", "PC-24"],
+  TBM: ["TBM 850", "TBM 900", "TBM 940"],
+  Embraer: ["Phenom 100", "Phenom 300", "Praetor 500", "Praetor 600"],
+  HondaJet: ["HA-420"],
+  Learjet: ["45", "60", "70", "75"],
+  Citation: ["CJ1", "CJ2", "CJ3", "CJ4", "XLS", "Latitude", "Longitude"],
+  Gulfstream: ["G280", "G450", "G550", "G650", "G700"],
+  Dassault: ["Falcon 2000", "Falcon 900", "Falcon 7X", "Falcon 8X"],
+  Bombardier: ["Challenger 350", "Challenger 650", "Global 6000", "Global 7500"],
+  "Airbus Corporate": ["ACJ319", "ACJ320neo"],
+  "Boeing Business Jet": ["BBJ", "BBJ MAX"],
+  Bell: ["206", "407", "429", "505"],
+  Robinson: ["R22", "R44", "R66"],
+  "Airbus Helicopters": ["H125", "H130", "H145"],
+  Sikorsky: ["S-76", "S-92"],
+};
+
+export const CONDITION_OPTIONS: { value: AircraftCondition; label: string }[] = [
+  { value: "excellent", label: "Excellent" },
+  { value: "good", label: "Good" },
+  { value: "average", label: "Average" },
+  { value: "heavy_bugs", label: "Heavy Bugs" },
+  { value: "heavy_oxidation", label: "Heavy Oxidation" },
+  { value: "oil_leaks", label: "Oil Leaks" },
+  { value: "stored_outside", label: "Stored Outside" },
+  { value: "hangared", label: "Hangared" },
+  { value: "recently_painted", label: "Recently Painted" },
+];
