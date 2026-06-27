@@ -64,7 +64,9 @@ export default function AboutUs() {
             <ul className="space-y-3 text-sm text-steel">
               <li className="flex items-start gap-2">
                 <Mail className="mt-0.5 h-4 w-4 shrink-0 text-amberDark" />
-                {businessSettings.contactEmail}
+                <a href={`mailto:${businessSettings.contactEmail}`} className="hover:text-ink">
+                  {businessSettings.contactEmail}
+                </a>
               </li>
               <li className="flex items-start gap-2">
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-amberDark" />

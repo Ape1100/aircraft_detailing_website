@@ -36,7 +36,11 @@ export function SiteFooter() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-aluminum/60">Contact</p>
             <ul className="mt-3 space-y-2 text-sm text-aluminum/80">
-              <li>{businessSettings.contactEmail}</li>
+              <li>
+                <a href={`mailto:${businessSettings.contactEmail}`} className="hover:text-paper">
+                  {businessSettings.contactEmail}
+                </a>
+              </li>
               <li>{businessSettings.serviceArea}</li>
             </ul>
           </div>

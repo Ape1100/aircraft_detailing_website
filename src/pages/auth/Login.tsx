@@ -67,7 +67,7 @@ export default function Login() {
               >
                 <div>
                   <Label htmlFor="admin-email">Admin email</Label>
-                  <Input id="admin-email" type="email" required placeholder="ops@brightworkaero.com" />
+                  <Input id="admin-email" type="email" required placeholder="contact@brightworkdetailing.com" />
                 </div>
                 <div>
                   <Label htmlFor="admin-password">Password</Label>
