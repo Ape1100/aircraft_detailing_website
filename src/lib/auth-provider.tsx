@@ -81,17 +81,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     init();
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
+    // This callback MUST stay synchronous. supabase-js awaits it directly
+    // inside the same exclusive lock that signInWithPassword/getSession
+    // hold for their entire duration (confirmed in GoTrueClient's
+    // _notifyAllSubscribers, called from inside _acquireLock(-1, ...) —
+    // wait forever, no timeout). loadProfile() queries `profiles` through
+    // the same Supabase client; if that needs to validate the session
+    // token via GoTrueClient internally, it tries to acquire that same
+    // lock again and deadlocks against itself forever — no error, no
+    // network request, the lock just stays held permanently. This is
+    // Supabase's own documented gotcha and workaround: keep the callback
+    // synchronous, defer any async follow-up with setTimeout so it runs
+    // after this callback (and the lock it's holding) has already
+    // returned.
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setTimeout(() => {
         if (session?.user?.id) {
-          const loadedProfile = await loadProfile(session.user.id);
-          setProfile(loadedProfile);
+          loadProfile(session.user.id).then(setProfile);
         } else {
           setProfile(null);
         }
-      }
-    );
+      }, 0);
+    });
 
     return () => subscription.subscription.unsubscribe();
   }, []);
