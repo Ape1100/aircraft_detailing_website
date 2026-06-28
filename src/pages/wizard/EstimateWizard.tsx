@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Camera, Check, Plane, Save, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, Plane, Save, ShieldAlert, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { NNumberPlate } from "@/components/aviation/NNumberPlate";
 import { ConfidenceGauge } from "@/components/aviation/ConfidenceGauge";
+import { PayabilityBadge } from "@/components/aviation/PayabilityBadge";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { OptionCard, StepShell } from "@/components/wizard/WizardChrome";
 import { calculateEstimate } from "@/lib/pricing-engine";
@@ -305,6 +306,7 @@ export default function EstimateWizard() {
             ) : (
               <div className="space-y-8">
                 <div className="flex flex-col items-center gap-4 rounded-xl border border-ink/10 bg-white p-8 text-center">
+                  <PayabilityBadge payable={false} />
                   <p className="text-xs uppercase tracking-wide text-steel2">Estimated price range</p>
                   <p className="font-display text-4xl font-semibold text-ink">
                     {formatCurrency(estimate.low)} – {formatCurrency(estimate.high)}
@@ -359,7 +361,10 @@ export default function EstimateWizard() {
                   </div>
                 </div>
 
-                <p className="text-xs text-steel2">{ESTIMATE_DISCLAIMER}</p>
+                <div className="flex items-start gap-3 rounded-lg border border-amber/40 bg-amber/10 px-4 py-3">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-amberDark" />
+                  <p className="text-sm text-amberDark">{ESTIMATE_DISCLAIMER}</p>
+                </div>
               </div>
             )}
           </StepShell>
@@ -394,9 +399,10 @@ export default function EstimateWizard() {
                 <Button variant="outline" size="lg" className="justify-start" onClick={() => setConvertChoice("Request Final Quote")}>
                   Request Final Quote
                 </Button>
-                <Button variant="subtle" size="lg" className="justify-start sm:col-span-2" onClick={() => setConvertChoice("Pay Deposit")}>
-                  Pay Deposit (available once Stripe is connected)
-                </Button>
+                <p className="text-xs text-steel2 sm:col-span-2">
+                  Payment isn't available from an instant estimate — every job is verified in person
+                  and finalized into a quote first. Use "Request Final Quote" above to start that.
+                </p>
               </div>
             )}
           </StepShell>

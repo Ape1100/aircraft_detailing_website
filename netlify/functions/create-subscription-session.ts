@@ -1,55 +1,199 @@
 // Netlify Function: create-subscription-session
 // ---------------------------------------------------------------------
-// TODO before this works:
-// 1. `npm install stripe`.
-// 2. Create a Stripe Product + recurring Price for each membership tier
-//    (Ramp Ready, Owner Care, Preservation) and note the price IDs below.
-// 3. Set STRIPE_SECRET_KEY and SITE_URL in your Netlify environment.
+// Creates a Stripe Checkout Session for a recurring membership. The
+// client sends a membership tier and the signed-in user's id — never a
+// price — and this function independently derives the authoritative
+// monthly amount. clientId is required so the Checkout Session's
+// metadata carries enough for stripe-webhook.ts to later attach the
+// resulting subscription to a memberships row (see that file for how
+// customer.subscription.deleted / invoice.paid are handled):
+//
+//   1. Load current pricing settings (server-loaded service catalog +
+//      pricing config — see pricing-settings.ts; falls back to the
+//      DEFAULT_* constants in pricing-engine.ts if Supabase isn't
+//      configured or the pricing tables don't exist yet).
+//   2. Run a representative baseline aircraft + service bundle for the
+//      requested tier through calculateEstimate(), with
+//      ctx.membershipTier set so the engine applies
+//      config.membershipDiscount itself.
+//   3. Charge estimate.total — the exact deterministic figure, not the
+//      confidence-variance low/high range that's meant for the
+//      instant-estimate UI.
+//
+// Tier contents (confirmed business decision — "minimal escalation",
+// each tier a strict superset of the one below plus added scope/
+// frequency, so price ordering holds structurally rather than by luck):
+//   Ramp Ready   — exterior wash, monthly.
+//   Owner Care   — + bug/exhaust residue removal, monthly;
+//                  + interior refresh, quarterly.
+//   Preservation — + interior refresh upgraded to monthly (was
+//                  quarterly in Owner Care); + brightwork polishing,
+//                  monthly.
+//
+// The pricing engine has no native concept of service cadence — every
+// selected service contributes its full price every time. To bill a
+// quarterly service at its true monthly cost, MEMBERSHIP_BASELINE_BUNDLES
+// pairs each code with a `monthlyFraction` (1 for monthly, 1/3 for
+// quarterly), and buildCadenceAdjustedServices() multiplies that
+// service's catalog price by the fraction before handing it to
+// calculateEstimate() — the engine itself is untouched.
+//
+// Fleet/FBO has no fixed bundle — it's explicitly "Custom" pricing on
+// the landing page — so it's rejected here rather than guessed at.
+//
+// Make sure STRIPE_SECRET_KEY and SITE_URL are set in your Netlify
+// environment.
 // ---------------------------------------------------------------------
 
 import type { Handler } from "@netlify/functions";
-// import Stripe from "stripe";
+import Stripe from "stripe";
+import { loadPricingSettings } from "./pricing-settings";
+import { calculateEstimate } from "../../src/lib/pricing-engine";
+import type { EstimateInput, MembershipTier, ServiceDefinition } from "../../src/types";
 
-// const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-//   apiVersion: "2024-06-20",
-// });
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2026-06-24.dahlia",
+});
 
-// TODO: replace with your real Stripe Price IDs once created in the dashboard.
-const PRICE_ID_BY_TIER: Record<string, string> = {
-  ramp_ready: "price_REPLACE_ME",
-  owner_care: "price_REPLACE_ME",
-  preservation: "price_REPLACE_ME",
+const MEMBERSHIP_DISPLAY_NAME: Record<MembershipTier, string> = {
+  ramp_ready: "Ramp Ready",
+  owner_care: "Owner Care",
+  preservation: "Preservation",
+  fleet_fbo: "Fleet / FBO",
 };
+
+interface BundleEntry {
+  code: string;
+  /** Fraction of the service's full catalog price billed per month — 1
+   * for a monthly service, 1/3 for a quarterly one, etc. */
+  monthlyFraction: number;
+}
+
+/** Confirmed per-tier contents — see the file-level comment for the
+ * "minimal escalation" rationale. fleet_fbo intentionally has no
+ * bundle: it's sold as a custom quote, not a fixed self-serve price. */
+const MEMBERSHIP_BASELINE_BUNDLES: Partial<Record<MembershipTier, BundleEntry[]>> = {
+  ramp_ready: [{ code: "exterior_wash", monthlyFraction: 1 }],
+  owner_care: [
+    { code: "exterior_wash", monthlyFraction: 1 },
+    { code: "bug_exhaust_removal", monthlyFraction: 1 },
+    { code: "interior_refresh", monthlyFraction: 1 / 3 },
+  ],
+  preservation: [
+    { code: "exterior_wash", monthlyFraction: 1 },
+    { code: "bug_exhaust_removal", monthlyFraction: 1 },
+    { code: "interior_refresh", monthlyFraction: 1 },
+    { code: "brightwork_polish", monthlyFraction: 1 },
+  ],
+};
+
+const BASELINE_AIRCRAFT: Omit<EstimateInput, "services"> = {
+  category: "piston_single",
+  make: "",
+  model: "",
+  condition: ["good"],
+  airport: "",
+  rampParked: false,
+  travelDistanceMiles: 0,
+  photoCount: 0,
+};
+
+/** Returns the full service catalog with bundle members' prices scaled
+ * by their monthlyFraction, so calculateEstimate()'s size/category/
+ * condition/membership-discount math applies on top of the
+ * cadence-adjusted base price instead of the full one-time price. */
+function buildCadenceAdjustedServices(catalog: ServiceDefinition[], bundle: BundleEntry[]): ServiceDefinition[] {
+  const fractionByCode = new Map(bundle.map((b) => [b.code, b.monthlyFraction]));
+  return catalog.map((s) => {
+    const fraction = fractionByCode.get(s.code);
+    if (fraction === undefined || s.startingPrice === null) return s;
+    return { ...s, startingPrice: s.startingPrice * fraction };
+  });
+}
+
+function badRequest(message: string) {
+  return { statusCode: 400, body: JSON.stringify({ error: message }) };
+}
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method not allowed" };
   }
 
-  try {
-    const { tier } = JSON.parse(event.body || "{}");
-    const priceId = PRICE_ID_BY_TIER[tier];
+  if (!process.env.SITE_URL) {
+    return { statusCode: 500, body: "Missing SITE_URL environment variable" };
+  }
 
-    if (!priceId) {
-      return { statusCode: 400, body: "Unknown or unconfigured membership tier" };
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(event.body || "{}");
+  } catch {
+    return badRequest("Malformed JSON body");
+  }
+
+  const tier = body.tier;
+  if (typeof tier !== "string" || !(tier in MEMBERSHIP_DISPLAY_NAME)) {
+    return badRequest(`tier must be one of: ${Object.keys(MEMBERSHIP_DISPLAY_NAME).join(", ")}`);
+  }
+
+  // Required so stripe-webhook.ts can later link this subscription back
+  // to a memberships row (memberships.client_id is a real FK to
+  // profiles, unlike custom_quotes' mock client ids) — there is no other
+  // identifying info available once Stripe sends async webhook events.
+  const clientId = body.clientId;
+  if (typeof clientId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)) {
+    return badRequest("clientId must be a UUID");
+  }
+
+  const bundle = MEMBERSHIP_BASELINE_BUNDLES[tier as MembershipTier];
+  if (!bundle) {
+    return badRequest(
+      "Fleet/FBO membership is custom-quoted and isn't available as a self-serve subscription — request a quote instead"
+    );
+  }
+
+  try {
+    const { services, pricingConfig, source } = await loadPricingSettings();
+    const cadenceAdjustedServices = buildCadenceAdjustedServices(services, bundle);
+
+    const estimate = calculateEstimate(
+      { ...BASELINE_AIRCRAFT, services: bundle.map((b) => b.code) },
+      cadenceAdjustedServices,
+      pricingConfig,
+      { membershipTier: tier as MembershipTier }
+    );
+
+    if (estimate.total <= 0) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: `Computed $0 monthly price for tier ${tier} — check the service catalog pricing` }),
+      };
     }
 
-    // TODO: replace this mock response with a real Stripe subscription Checkout Session:
-    //
-    // const session = await stripe.checkout.sessions.create({
-    //   mode: "subscription",
-    //   line_items: [{ price: priceId, quantity: 1 }],
-    //   success_url: `${process.env.SITE_URL}/portal/membership?updated=1`,
-    //   cancel_url: `${process.env.SITE_URL}/portal/membership`,
-    // });
-    // return { statusCode: 200, body: JSON.stringify({ url: session.url }) };
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: `${MEMBERSHIP_DISPLAY_NAME[tier as MembershipTier]} Membership` },
+            recurring: { interval: "month" },
+            unit_amount: Math.round(estimate.total * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.SITE_URL}/portal/membership?updated=1`,
+      cancel_url: `${process.env.SITE_URL}/portal/membership`,
+      metadata: { tier, clientId, pricingSource: source },
+    });
 
-    return {
-      statusCode: 501,
-      body: JSON.stringify({
-        error: "Stripe is not configured yet. See the TODO comments in this file.",
-      }),
-    };
+    if (!session.url) {
+      return { statusCode: 500, body: "Failed to create Stripe subscription session" };
+    }
+
+    return { statusCode: 200, body: JSON.stringify({ url: session.url, amount: estimate.total }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: (err as Error).message }) };
   }

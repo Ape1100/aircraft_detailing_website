@@ -17,6 +17,7 @@ import type {
 } from "@/types";
 import { DEFAULT_DISCOUNT_RULES, DEFAULT_PRICING_CONFIG, DEFAULT_SERVICES } from "@/lib/pricing-engine";
 import { DEFAULT_SAMPLE_ID } from "@/lib/sample-backgrounds";
+import { supabase } from "@/lib/supabase-client";
 
 const STORAGE_KEY = "brightwork-settings-v2";
 
@@ -42,7 +43,7 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   tagline: "Aircraft Appearance & Preservation Services",
   logoDataUrl: null,
   contactEmail: "hello@brightworkaero.com",
-  contactPhone: "(916) 555-0148",
+  contactPhone: "(800) 467-2331",
   serviceArea: "Mobile service — CA Central Valley & Bay Area",
   accentColorHex: "#E8A33D",
   entityType: "sole_proprietorship",
@@ -160,6 +161,12 @@ interface SettingsContextValue extends SettingsState {
 
   addCustomQuote: (quote: Omit<CustomQuote, "id" | "createdAt">) => CustomQuote;
   updateCustomQuoteStatus: (id: string, status: CustomQuote["status"]) => void;
+  /** The only transition that makes a quote payable. Writes through to
+   * Supabase (create-checkout-session.ts reads from there, not
+   * localStorage) before flipping local state — if the write fails, the
+   * quote stays un-verified rather than silently claiming to be locked
+   * in. Throws on failure so the caller can show an error. */
+  verifyCustomQuote: (id: string) => Promise<void>;
 
   setGalleryEnabled: (enabled: boolean) => void;
   addGalleryPhoto: (photo: Omit<GalleryPhotoPair, "id">) => void;
@@ -311,6 +318,34 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           ...s,
           customQuotes: s.customQuotes.map((q) => (q.id === id ? { ...q, status } : q)),
         })),
+
+      verifyCustomQuote: async (id) => {
+        const quote = state.customQuotes.find((q) => q.id === id);
+        if (!quote) throw new Error("Quote not found");
+
+        const verifiedAt = new Date().toISOString();
+        const { error } = await supabase.from("custom_quotes").upsert({
+          id: quote.id,
+          client_id: quote.clientId,
+          client_name: quote.clientName,
+          request_id: quote.requestId ?? null,
+          line_items: quote.lineItems,
+          applied_discount_ids: quote.appliedDiscountIds,
+          notes: quote.notes ?? null,
+          subtotal: quote.subtotal,
+          discount_total: quote.discountTotal,
+          total: quote.total,
+          status: "verified",
+          verified_at: verifiedAt,
+          created_at: quote.createdAt,
+        });
+        if (error) throw error;
+
+        setState((s) => ({
+          ...s,
+          customQuotes: s.customQuotes.map((q) => (q.id === id ? { ...q, status: "verified", verifiedAt } : q)),
+        }));
+      },
 
       setGalleryEnabled: (enabled) =>
         setState((s) => ({ ...s, gallery: { ...s.gallery, enabled } })),

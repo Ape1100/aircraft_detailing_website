@@ -303,7 +303,11 @@ export interface CustomQuote {
   discountTotal: number;
   total: number;
   createdAt: string;
-  status: "draft" | "sent" | "accepted";
+  /** "verified" means an admin has physically confirmed the aircraft/job
+   * in person and locked in this number — it's the only status that may
+   * be charged via Stripe (see create-checkout-session.ts). */
+  status: "draft" | "sent" | "accepted" | "verified";
+  verifiedAt?: string;
 }
 
 // ---- Estimate wizard types ----
@@ -324,6 +328,10 @@ export interface EstimateInput {
 }
 
 export interface EstimateResult {
+  /** Exact deterministic total before the confidence-variance range is
+   * applied — this is what should actually be charged (e.g. via Stripe),
+   * since `low`/`high` exist only to set customer expectations. */
+  total: number;
   low: number;
   high: number;
   laborHoursLow: number;

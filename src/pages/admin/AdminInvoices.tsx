@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PayabilityBadge } from "@/components/aviation/PayabilityBadge";
 import { MOCK_INVOICES } from "@/lib/mock-data";
 import { useSettings } from "@/lib/settings-store";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -39,7 +40,10 @@ export default function AdminInvoices() {
                 <p className="text-sm font-medium text-ink">{formatCurrency(inv.amount)}</p>
                 <p className="text-xs text-steel2">Issued {formatDate(inv.issuedAt)}</p>
               </div>
-              <Badge variant={STATUS_VARIANT[inv.status]}>{inv.status.replace("_", " ")}</Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant={STATUS_VARIANT[inv.status]}>{inv.status.replace("_", " ")}</Badge>
+                <PayabilityBadge payable />
+              </div>
             </div>
           ))}
         </CardContent>

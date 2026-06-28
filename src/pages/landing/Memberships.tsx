@@ -7,25 +7,25 @@ import { Badge } from "@/components/ui/badge";
 const PLANS = [
   {
     name: "Ramp Ready",
-    price: "$299",
+    price: "$269",
     cadence: "/month",
     description: "Recurring exterior care to keep an actively flown aircraft presentable.",
-    features: ["Monthly exterior wash", "Bug & exhaust residue removal", "Service history log"],
+    features: ["Monthly exterior wash", "Service history log"],
   },
   {
     name: "Owner Care",
-    price: "$599",
+    price: "$438",
     cadence: "/month",
     description: "Our most popular plan for owners who want consistent appearance upkeep.",
-    features: ["Everything in Ramp Ready", "Monthly interior refresh", "Quarterly belly cleaning", "Priority scheduling"],
+    features: ["Everything in Ramp Ready", "Monthly bug & exhaust residue removal", "Quarterly interior refresh", "Priority scheduling"],
     featured: true,
   },
   {
     name: "Preservation",
-    price: "$1,200",
+    price: "$834",
     cadence: "/month",
     description: "Comprehensive appearance preservation for higher-use or higher-value aircraft.",
-    features: ["Everything in Owner Care", "Brightwork polishing", "Detailed photo documentation", "Pre-trip readiness checks"],
+    features: ["Everything in Owner Care, with interior refresh upgraded to monthly", "Monthly brightwork polishing", "Detailed photo documentation", "Pre-trip readiness checks"],
   },
   {
     name: "Fleet / FBO",

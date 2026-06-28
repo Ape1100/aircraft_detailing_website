@@ -73,9 +73,9 @@ export const DEFAULT_SERVICES: ServiceDefinition[] = [
     name: "Brightwork Polishing",
     description: "Polishing of exposed polished metal trim and accents.",
     category: "launch",
-    startingPrice: null,
+    startingPrice: 395,
     availability: "available",
-    unit: "quote",
+    unit: "flat",
   },
   {
     code: "presale_cleanup",
@@ -364,6 +364,7 @@ export function calculateEstimate(
 
   if (selected.length === 0) {
     return {
+      total: 0,
       low: 0,
       high: 0,
       laborHoursLow: 0,
@@ -442,6 +443,7 @@ export function calculateEstimate(
   const recommendedAddOns = recommendAddOns(selected, input.condition, services);
 
   return {
+    total: Math.round(runningTotal),
     low,
     high,
     laborHoursLow,

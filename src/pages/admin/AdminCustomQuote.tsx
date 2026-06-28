@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PayabilityBadge } from "@/components/aviation/PayabilityBadge";
 import { useSettings } from "@/lib/settings-store";
+import { startCustomQuoteCheckout } from "@/lib/stripe-client";
 import { MOCK_ADMIN_CLIENTS, MOCK_REQUESTS } from "@/lib/mock-data";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { CustomQuoteLineItem } from "@/types";
@@ -19,13 +21,40 @@ function isHolidayActive(startDate?: string, endDate?: string): boolean {
 }
 
 export default function AdminCustomQuote() {
-  const { services, discountRules, customQuotes, addCustomQuote, updateCustomQuoteStatus } = useSettings();
+  const { services, discountRules, customQuotes, addCustomQuote, updateCustomQuoteStatus, verifyCustomQuote } =
+    useSettings();
   const [clientId, setClientId] = useState(MOCK_ADMIN_CLIENTS[0]?.id ?? "");
   const [requestId, setRequestId] = useState<string>("none");
   const [lineItems, setLineItems] = useState<CustomQuoteLineItem[]>([]);
   const [selectedDiscountIds, setSelectedDiscountIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [savedNotice, setSavedNotice] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [chargingId, setChargingId] = useState<string | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+
+  async function handleVerify(id: string) {
+    setQuoteError(null);
+    setVerifyingId(id);
+    try {
+      await verifyCustomQuote(id);
+    } catch (err) {
+      setQuoteError((err as Error).message || "Failed to verify quote");
+    } finally {
+      setVerifyingId(null);
+    }
+  }
+
+  async function handleCharge(id: string) {
+    setQuoteError(null);
+    setChargingId(id);
+    try {
+      await startCustomQuoteCheckout(id);
+    } catch (err) {
+      setQuoteError((err as Error).message || "Failed to start checkout");
+      setChargingId(null);
+    }
+  }
 
   const client = MOCK_ADMIN_CLIENTS.find((c) => c.id === clientId);
   const clientRequests = MOCK_REQUESTS.filter((r) => r.clientId === clientId);
@@ -247,18 +276,30 @@ export default function AdminCustomQuote() {
         <Card>
           <CardHeader>
             <CardTitle>Recent custom quotes</CardTitle>
+            <CardDescription>
+              A quote is only payable once it's "verified" — meaning you've physically confirmed the
+              aircraft/job in person and locked in the number. Draft, sent, and accepted quotes can still
+              change, so they're never charged.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="divide-y divide-ink/10 p-0">
+          <CardContent className="divide-y divide-ink/0">
+            {quoteError && (
+              <div className="px-6 py-3 text-sm text-rust">{quoteError}</div>
+            )}
             {customQuotes.map((q) => (
-              <div key={q.id} className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div key={q.id} className="flex flex-col gap-3 border-b border-ink/10 px-6 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink">{q.clientName} — {formatCurrency(q.total)}</p>
-                  <p className="text-xs text-steel2">{formatDate(q.createdAt)} · {q.lineItems.length} line item(s)</p>
+                  <p className="text-xs text-steel2">
+                    {formatDate(q.createdAt)} · {q.lineItems.length} line item(s)
+                    {q.verifiedAt ? ` · verified ${formatDate(q.verifiedAt)}` : ""}
+                  </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant={q.status === "accepted" ? "green" : q.status === "sent" ? "amber" : "neutral"}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge variant={q.status === "verified" ? "green" : q.status === "accepted" ? "amber" : "neutral"}>
                     {q.status}
                   </Badge>
+                  <PayabilityBadge payable={q.status === "verified"} />
                   {q.status === "draft" && (
                     <Button size="sm" variant="outline" onClick={() => updateCustomQuoteStatus(q.id, "sent")}>
                       Mark sent
@@ -267,6 +308,16 @@ export default function AdminCustomQuote() {
                   {q.status === "sent" && (
                     <Button size="sm" variant="outline" onClick={() => updateCustomQuoteStatus(q.id, "accepted")}>
                       Mark accepted
+                    </Button>
+                  )}
+                  {q.status === "accepted" && (
+                    <Button size="sm" variant="amber" disabled={verifyingId === q.id} onClick={() => handleVerify(q.id)}>
+                      {verifyingId === q.id ? "Verifying…" : "Mark verified & lock for payment"}
+                    </Button>
+                  )}
+                  {q.status === "verified" && (
+                    <Button size="sm" variant="amber" disabled={chargingId === q.id} onClick={() => handleCharge(q.id)}>
+                      {chargingId === q.id ? "Starting checkout…" : "Charge via Stripe"}
                     </Button>
                   )}
                 </div>
