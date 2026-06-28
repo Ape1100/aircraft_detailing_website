@@ -19,6 +19,36 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** supabase-js's GoTrueClient coordinates session reads/writes across
+ * browser tabs using the Web Locks API (lock name
+ * "sb-<project-ref>-auth-token"). If that lock is ever left held — a
+ * tab closed mid-operation, a browser quirk — every future call that
+ * needs it (getSession, signInWithPassword, signUp, signOut) hangs
+ * forever: no error, no network request, nothing. Confirmed via
+ * navigator.locks.query() during a real stuck session on the live
+ * site. This wraps those calls with a hard timeout so a stuck lock
+ * degrades to "treat as signed out, let the user retry" instead of
+ * freezing the app permanently with zero recovery path. */
+function withTimeout<T>(promise: Promise<T>, fallback: T, ms = 8000): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
+
+function timeoutError(action: string) {
+  return new Error(`${action} timed out — please refresh the page and try again.`);
+}
+
 async function loadProfile(userId: string): Promise<ClientProfile | null> {
   const { data, error } = await supabase
     .from("profiles")
@@ -40,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function init() {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await withTimeout(supabase.auth.getSession(), { data: { session: null }, error: null });
       setSession(data.session ?? null);
       if (data.session?.user?.id) {
         const loadedProfile = await loadProfile(data.session.user.id);
@@ -73,10 +103,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
 
       signIn: async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { data, error } = await withTimeout(
+          supabase.auth.signInWithPassword({ email, password }),
+          { data: { user: null, session: null }, error: timeoutError("Sign-in") } as Awaited<
+            ReturnType<typeof supabase.auth.signInWithPassword>
+          >
+        );
 
         if (error) {
           throw error;
@@ -102,11 +134,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // has no client-side insert policy, and even if it did, there's
         // no authenticated session yet to satisfy an auth.uid() check
         // at this exact moment).
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { name, company: company || null } },
-        });
+        const { data, error } = await withTimeout(
+          supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { name, company: company || null } },
+          }),
+          { data: { user: null, session: null }, error: timeoutError("Sign-up") } as Awaited<
+            ReturnType<typeof supabase.auth.signUp>
+          >
+        );
 
         if (error) {
           throw error;
@@ -132,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       signOut: async () => {
-        await supabase.auth.signOut();
+        await withTimeout(supabase.auth.signOut(), { error: null });
         setProfile(null);
         setSession(null);
       },
