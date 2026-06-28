@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -7,10 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { BrandBackdrop } from "@/components/layout/BrandBackdrop";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { useSettings } from "@/lib/settings-store";
+import { useAuth } from "@/lib/auth-provider";
 
 export default function Login() {
   const navigate = useNavigate();
   const { businessSettings } = useSettings();
+  const { signIn } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [isAdminTab, setIsAdminTab] = useState(false);
 
   return (
     <BrandBackdrop background={businessSettings.background} className="flex min-h-screen items-center justify-center px-6 py-16">
@@ -21,8 +26,8 @@ export default function Login() {
           </Link>
           <CardTitle className="mt-4">Sign in</CardTitle>
           <CardDescription>
-            Demo mode — no backend is connected yet, so any details will sign
-            you into the mock portal. See README for Supabase auth setup.
+            Sign in with your account. The "Admin" tab is just a shortcut —
+            access is determined by your account's role, not which tab you use.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -35,9 +40,22 @@ export default function Login() {
             <TabsContent value="client">
               <form
                 className="space-y-4"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  navigate("/portal/dashboard");
+                  setError(null);
+                  const form = e.currentTarget as HTMLFormElement;
+                  const email = (form.elements.namedItem("login-email") as HTMLInputElement).value;
+                  const password = (form.elements.namedItem("login-password") as HTMLInputElement).value;
+                  try {
+                    const profile = await signIn(email, password);
+                    if (profile?.role === "admin") {
+                      navigate("/admin/dashboard");
+                    } else {
+                      navigate("/portal/dashboard");
+                    }
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
                 }}
               >
                 <div>
@@ -52,6 +70,7 @@ export default function Login() {
                   Sign in to Client Portal
                 </Button>
               </form>
+              {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
               <p className="mt-4 text-center text-sm text-steel">
                 New here? <Link to="/signup" className="text-amberDark hover:underline">Create an account</Link>
               </p>
@@ -60,9 +79,22 @@ export default function Login() {
             <TabsContent value="admin">
               <form
                 className="space-y-4"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  navigate("/admin/dashboard");
+                  setError(null);
+                  const form = e.currentTarget as HTMLFormElement;
+                  const email = (form.elements.namedItem("admin-email") as HTMLInputElement).value;
+                  const password = (form.elements.namedItem("admin-password") as HTMLInputElement).value;
+                  try {
+                    const profile = await signIn(email, password);
+                    if (profile?.role === "admin") {
+                      navigate("/admin/dashboard");
+                    } else {
+                      navigate("/portal/dashboard");
+                    }
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
                 }}
               >
                 <div>

@@ -13,9 +13,10 @@ interface PortalShellProps {
   navItems: PortalNavItem[];
   roleLabel: string;
   userName: string;
+  onLogout: () => void;
 }
 
-export function PortalShell({ navItems, roleLabel, userName }: PortalShellProps) {
+export function PortalShell({ navItems, roleLabel, userName, onLogout }: PortalShellProps) {
   return (
     <div className="flex min-h-screen bg-paper">
       <aside className="hidden w-64 flex-col border-r border-ink/10 bg-white md:flex">
@@ -50,9 +51,14 @@ export function PortalShell({ navItems, roleLabel, userName }: PortalShellProps)
                 Exit portal
               </Link>
             </div>
-            <Link to="/" className="rounded-md p-2 text-steel hover:bg-paperDim" aria-label="Log out">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="rounded-md p-2 text-steel hover:bg-paperDim"
+              aria-label="Log out"
+            >
               <LogOut className="h-4 w-4" />
-            </Link>
+            </button>
           </div>
         </div>
       </aside>

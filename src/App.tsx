@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useNavigate } from "react-router-dom";
 import {
   ClipboardList,
   FileSignature,
@@ -20,6 +20,9 @@ import AboutUs from "@/pages/landing/AboutUs";
 import Login from "@/pages/auth/Login";
 import Signup from "@/pages/auth/Signup";
 import EstimateWizard from "@/pages/wizard/EstimateWizard";
+import { RequireAdmin } from "@/components/auth/RequireAdmin";
+import { RequireClient } from "@/components/auth/RequireClient";
+import { useAuth } from "@/lib/auth-provider";
 
 import { PortalShell, type PortalNavItem } from "@/components/layout/PortalShell";
 import ClientDashboard from "@/pages/client/ClientDashboard";
@@ -67,11 +70,35 @@ const ADMIN_NAV: PortalNavItem[] = [
 ];
 
 function ClientLayout() {
-  return <PortalShell navItems={CLIENT_NAV} roleLabel="Client Portal" userName="Dana Whitfield" />;
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  return (
+    <PortalShell
+      navItems={CLIENT_NAV}
+      roleLabel="Client Portal"
+      userName={profile?.name ?? "Client"}
+      onLogout={async () => {
+        await signOut();
+        navigate("/");
+      }}
+    />
+  );
 }
 
 function AdminLayout() {
-  return <PortalShell navItems={ADMIN_NAV} roleLabel="Admin Portal" userName="Ops Team" />;
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  return (
+    <PortalShell
+      navItems={ADMIN_NAV}
+      roleLabel="Admin Portal"
+      userName={profile?.name ?? "Admin"}
+      onLogout={async () => {
+        await signOut();
+        navigate("/");
+      }}
+    />
+  );
 }
 
 export default function App() {
@@ -84,28 +111,32 @@ export default function App() {
       <Route path="/estimate" element={<EstimateWizard />} />
       <Route path="/admin/setup" element={<SetupWizard />} />
 
-      <Route path="/portal" element={<ClientLayout />}>
-        <Route path="dashboard" element={<ClientDashboard />} />
-        <Route path="aircraft" element={<MyAircraft />} />
-        <Route path="requests" element={<ServiceRequests />} />
-        <Route path="requests/new" element={<NewServiceRequest />} />
-        <Route path="invoices" element={<Invoices />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="membership" element={<Membership />} />
+      <Route path="/portal" element={<RequireClient />}>
+        <Route element={<ClientLayout />}>
+          <Route path="dashboard" element={<ClientDashboard />} />
+          <Route path="aircraft" element={<MyAircraft />} />
+          <Route path="requests" element={<ServiceRequests />} />
+          <Route path="requests/new" element={<NewServiceRequest />} />
+          <Route path="invoices" element={<Invoices />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="membership" element={<Membership />} />
+        </Route>
       </Route>
 
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route path="dashboard" element={<AdminDashboard />} />
-        <Route path="clients" element={<AdminClients />} />
-        <Route path="requests" element={<AdminRequests />} />
-        <Route path="custom-quote" element={<AdminCustomQuote />} />
-        <Route path="report-builder" element={<AdminReportBuilder />} />
-        <Route path="services" element={<AdminServices />} />
-        <Route path="gallery" element={<AdminGallery />} />
-        <Route path="pricing-rules" element={<AdminPricingRules />} />
-        <Route path="discounts" element={<AdminDiscounts />} />
-        <Route path="invoices" element={<AdminInvoices />} />
-        <Route path="settings" element={<AdminSettings />} />
+      <Route path="/admin" element={<RequireAdmin />}>
+        <Route element={<AdminLayout />}>
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="clients" element={<AdminClients />} />
+          <Route path="requests" element={<AdminRequests />} />
+          <Route path="custom-quote" element={<AdminCustomQuote />} />
+          <Route path="report-builder" element={<AdminReportBuilder />} />
+          <Route path="services" element={<AdminServices />} />
+          <Route path="gallery" element={<AdminGallery />} />
+          <Route path="pricing-rules" element={<AdminPricingRules />} />
+          <Route path="discounts" element={<AdminDiscounts />} />
+          <Route path="invoices" element={<AdminInvoices />} />
+          <Route path="settings" element={<AdminSettings />} />
+        </Route>
       </Route>
     </Routes>
   );

@@ -23,6 +23,11 @@ create type invoice_status as enum ('unpaid', 'deposit_paid', 'paid', 'overdue')
 
 create type membership_tier as enum ('ramp_ready', 'owner_care', 'preservation', 'fleet_fbo');
 
+-- 'verified' means an admin has physically confirmed the aircraft/job in
+-- person and locked in the number — this is the ONLY status that may be
+-- charged via Stripe. See create-checkout-session.ts's policy comment.
+create type custom_quote_status as enum ('draft', 'sent', 'accepted', 'verified');
+
 create type observed_issue_category as enum (
   'paint_chips', 'scratches', 'corrosion_observation', 'loose_missing_fastener',
   'fluid_staining', 'tire_wheel_observation', 'window_condition',
@@ -84,6 +89,37 @@ create table quotes (
   sent_at timestamptz not null default now(),
   expires_at timestamptz,
   accepted boolean not null default false
+);
+
+-- Admin-built one-off quotes (see src/pages/admin/AdminCustomQuote.tsx).
+-- client_id is plain text, not a uuid FK to profiles: the admin portal's
+-- client list is still mock data (MOCK_ADMIN_CLIENTS, ids like "client-1"),
+-- unrelated to real Supabase profiles. Until that's wired up, the "owner"
+-- half of the RLS policy below won't match anything in practice — only
+-- is_admin() grants access. request_id is similarly a bare uuid with no FK
+-- (the request-prefill flow in AdminCustomQuote.tsx is also still mock
+-- data), so this table has no hard dependency on service_requests existing.
+create table custom_quotes (
+  id uuid primary key default gen_random_uuid(),
+  client_id text not null,
+  client_name text not null,
+  request_id uuid,
+  line_items jsonb not null default '[]'::jsonb,
+  applied_discount_ids text[] not null default '{}',
+  notes text,
+  subtotal numeric(10, 2) not null,
+  discount_total numeric(10, 2) not null default 0,
+  total numeric(10, 2) not null,
+  status custom_quote_status not null default 'draft',
+  verified_at timestamptz,
+  created_at timestamptz not null default now(),
+  stripe_checkout_session_id text,
+  -- Set by stripe-webhook.ts on checkout.session.completed. Separate
+  -- from `status`: status tracks the verification/finalization
+  -- lifecycle (draft -> ... -> verified), paid_at tracks whether the
+  -- Stripe charge actually went through, since those are different
+  -- facts that can't both be represented by a single status column.
+  paid_at timestamptz
 );
 
 create table invoices (
@@ -167,6 +203,7 @@ alter table aircraft enable row level security;
 alter table service_requests enable row level security;
 alter table service_items enable row level security;
 alter table quotes enable row level security;
+alter table custom_quotes enable row level security;
 alter table invoices enable row level security;
 alter table payments enable row level security;
 alter table memberships enable row level security;
@@ -186,6 +223,38 @@ create policy "Profiles: self or admin read" on profiles
   for select using (id = auth.uid() or is_admin());
 create policy "Profiles: self update" on profiles
   for update using (id = auth.uid() or is_admin());
+
+-- profiles deliberately has NO insert policy for normal clients/admins to
+-- use directly. The only supported way a profiles row is created is the
+-- trigger below, which runs as the function owner (security definer) and
+-- so bypasses RLS entirely — it fires the moment a row lands in
+-- auth.users, regardless of whether email confirmation is pending (the
+-- client may not have an authenticated session yet at that point, so any
+-- auth.uid()-keyed insert policy would still fail anyway). Do not "fix"
+-- a broken signup by adding a client-side insert policy instead of using
+-- this trigger.
+create function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, role, name, email, company)
+  values (
+    new.id,
+    'client',
+    coalesce(new.raw_user_meta_data ->> 'name', split_part(new.email, '@', 1)),
+    new.email,
+    new.raw_user_meta_data ->> 'company'
+  );
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
 
 create policy "Aircraft: owner or admin" on aircraft
   for all using (owner_id = auth.uid() or is_admin());
@@ -208,6 +277,9 @@ create policy "Quotes: via parent request" on quotes
       where sr.id = quotes.request_id and sr.client_id = auth.uid()
     )
   );
+
+create policy "Custom quotes: owner or admin" on custom_quotes
+  for all using (client_id = (auth.uid())::text or is_admin());
 
 create policy "Invoices: owner or admin" on invoices
   for all using (client_id = auth.uid() or is_admin());
