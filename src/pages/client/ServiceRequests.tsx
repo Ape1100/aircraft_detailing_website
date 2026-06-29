@@ -1,16 +1,20 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RequestStatusBadge } from "@/components/aviation/RequestStatusBadge";
+import { RequestDetailDialog } from "@/components/client/RequestDetailDialog";
 import { useClientAircraft, useClientRequests } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import type { ServiceRequest } from "@/types";
 
 export default function ServiceRequests() {
   const { services } = useSettings();
   const { data: aircraft } = useClientAircraft();
   const { data: requests } = useClientRequests();
+  const [selected, setSelected] = useState<ServiceRequest | null>(null);
 
   return (
     <div className="space-y-6">
@@ -31,7 +35,12 @@ export default function ServiceRequests() {
           {requests.map((r) => {
             const aircraftItem = aircraft.find((a) => a.id === r.aircraftId);
             return (
-              <div key={r.id} className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                key={r.id}
+                onClick={() => setSelected(r)}
+                className="flex w-full flex-col gap-3 px-6 py-5 text-left transition-colors hover:bg-paperDim sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div>
                   <p className="font-medium text-ink">{aircraftItem?.tailNumber} — {aircraftItem?.make} {aircraftItem?.model}</p>
                   <p className="text-sm text-steel">
@@ -47,11 +56,20 @@ export default function ServiceRequests() {
                   )}
                   <RequestStatusBadge status={r.status} />
                 </div>
-              </div>
+              </button>
             );
           })}
         </CardContent>
       </Card>
+
+      <RequestDetailDialog
+        request={selected}
+        aircraft={selected ? aircraft.find((a) => a.id === selected.aircraftId) ?? null : null}
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+      />
     </div>
   );
 }

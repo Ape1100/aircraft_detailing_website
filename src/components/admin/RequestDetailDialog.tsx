@@ -3,9 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { RequestStatusBadge } from "@/components/aviation/RequestStatusBadge";
-import { getSignedPhotoUrl, type AdminServiceRequest, updateServiceRequest } from "@/lib/supabase-client-hooks";
-import { supabase } from "@/lib/supabase-client";
+import { PhotoGallery } from "@/components/aviation/PhotoGallery";
+import { type AdminServiceRequest, updateServiceRequest } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { formatDate } from "@/lib/utils";
 
@@ -18,11 +19,13 @@ interface RequestDetailDialogProps {
 
 export function RequestDetailDialog({ request, open, onOpenChange, onUpdated }: RequestDetailDialogProps) {
   const { services } = useSettings();
-  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [estimateLow, setEstimateLow] = useState("");
   const [estimateHigh, setEstimateHigh] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
+  const [adminNotes, setAdminNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,19 +33,9 @@ export function RequestDetailDialog({ request, open, onOpenChange, onUpdated }: 
     setEstimateLow(request.estimateLow != null ? String(request.estimateLow) : "");
     setEstimateHigh(request.estimateHigh != null ? String(request.estimateHigh) : "");
     setScheduledDate(request.scheduledDate ?? "");
+    setAdminNotes(request.adminNotes ?? "");
     setError(null);
-    setPhotoUrls([]);
-
-    if (request.photoCount > 0) {
-      supabase
-        .from("request_photos")
-        .select("url")
-        .eq("request_id", request.id)
-        .then(async ({ data }) => {
-          const urls = await Promise.all((data ?? []).map((row) => getSignedPhotoUrl(row.url)));
-          setPhotoUrls(urls);
-        });
-    }
+    setNotesSaved(false);
   }, [request]);
 
   if (!request) return null;
@@ -57,6 +50,19 @@ export function RequestDetailDialog({ request, open, onOpenChange, onUpdated }: 
       setError((err as Error).message || "Failed to update request.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleSaveNotes() {
+    setSavingNotes(true);
+    setError(null);
+    try {
+      await updateServiceRequest(request!.id, { adminNotes: adminNotes || null });
+      setNotesSaved(true);
+    } catch (err) {
+      setError((err as Error).message || "Failed to save notes.");
+    } finally {
+      setSavingNotes(false);
     }
   }
 
@@ -98,25 +104,12 @@ export function RequestDetailDialog({ request, open, onOpenChange, onUpdated }: 
 
           {request.notes && (
             <div>
-              <p className="text-xs uppercase tracking-wide text-steel2">Notes</p>
+              <p className="text-xs uppercase tracking-wide text-steel2">Client notes</p>
               <p className="text-sm text-ink">{request.notes}</p>
             </div>
           )}
 
-          {request.photoCount > 0 && (
-            <div>
-              <p className="mb-2 text-xs uppercase tracking-wide text-steel2">Photos</p>
-              {photoUrls.length === 0 ? (
-                <p className="text-sm text-steel">Loading photos…</p>
-              ) : (
-                <div className="grid grid-cols-4 gap-2">
-                  {photoUrls.map((url, idx) => (
-                    <img key={idx} src={url} alt="" className="aspect-square rounded-lg object-cover" />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          <PhotoGallery requestId={request.id} ownerId={request.clientId} initialCount={request.photoCount} />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -138,6 +131,25 @@ export function RequestDetailDialog({ request, open, onOpenChange, onUpdated }: 
                 onChange={(e) => setEstimateHigh(e.target.value)}
                 disabled={request.status !== "requested"}
               />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="admin-notes">Admin notes (price adjustment reasoning, aircraft condition)</Label>
+            <Textarea
+              id="admin-notes"
+              value={adminNotes}
+              onChange={(e) => {
+                setAdminNotes(e.target.value);
+                setNotesSaved(false);
+              }}
+              placeholder="e.g. raised estimate — heavy oxidation on leading edges observed on-site"
+            />
+            <div className="mt-1.5 flex items-center gap-3">
+              <Button type="button" size="sm" variant="outline" disabled={savingNotes} onClick={handleSaveNotes}>
+                {savingNotes ? "Saving…" : "Save notes"}
+              </Button>
+              {notesSaved && <p className="text-xs text-navgreen">Saved.</p>}
             </div>
           </div>
 

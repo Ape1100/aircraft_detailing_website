@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { RequestStatusBadge } from "@/components/aviation/RequestStatusBadge";
 import { NNumberPlate } from "@/components/aviation/NNumberPlate";
-import { useAdminClientDetail, type AdminClient } from "@/lib/supabase-client-hooks";
+import { RequestDetailDialog } from "@/components/admin/RequestDetailDialog";
+import { useAdminClientDetail, type AdminClient, type AdminServiceRequest } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -14,7 +16,8 @@ interface ClientDetailDialogProps {
 
 export function ClientDetailDialog({ client, open, onOpenChange }: ClientDetailDialogProps) {
   const { services } = useSettings();
-  const { aircraft, requests, loading } = useAdminClientDetail(client?.id ?? null);
+  const { aircraft, requests, loading, refetch } = useAdminClientDetail(client?.id ?? null);
+  const [selectedRequest, setSelectedRequest] = useState<AdminServiceRequest | null>(null);
 
   if (!client) return null;
 
@@ -80,7 +83,12 @@ export function ClientDetailDialog({ client, open, onOpenChange }: ClientDetailD
                 ) : (
                   <div className="divide-y divide-ink/10 rounded-lg border border-ink/10">
                     {requests.map((r) => (
-                      <div key={r.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                      <button
+                        type="button"
+                        key={r.id}
+                        onClick={() => setSelectedRequest({ ...r, clientName: client.name })}
+                        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-paperDim"
+                      >
                         <div>
                           <p className="text-sm text-ink">
                             {r.aircraft.tailNumber} —{" "}
@@ -96,7 +104,7 @@ export function ClientDetailDialog({ client, open, onOpenChange }: ClientDetailD
                           </p>
                         </div>
                         <RequestStatusBadge status={r.status} />
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -105,6 +113,18 @@ export function ClientDetailDialog({ client, open, onOpenChange }: ClientDetailD
           )}
         </div>
       </DialogContent>
+
+      <RequestDetailDialog
+        request={selectedRequest}
+        open={selectedRequest !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRequest(null);
+        }}
+        onUpdated={() => {
+          refetch();
+          setSelectedRequest(null);
+        }}
+      />
     </Dialog>
   );
 }

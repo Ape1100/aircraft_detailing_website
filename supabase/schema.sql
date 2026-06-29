@@ -76,6 +76,11 @@ create table service_requests (
   airport_location text not null,
   fbo_name text,
   notes text,
+  -- Separate from the client's own `notes` above on purpose: an admin's
+  -- price-adjustment justification and aircraft-condition observations
+  -- should never overwrite or blend with what the client originally
+  -- wrote. Admin-only — not shown anywhere in the client portal.
+  admin_notes text,
   estimate_low numeric(10, 2),
   estimate_high numeric(10, 2),
   created_at timestamptz not null default now()
@@ -88,12 +93,17 @@ create table service_items (
   created_at timestamptz not null default now()
 );
 
--- Photos a client attaches when submitting a request (e.g. current
--- condition), uploaded to the aircraft-photos storage bucket below under
--- <client_user_id>/<request_id>/<filename>. `url` stores that storage
--- path, not a public URL — the bucket is private, so callers resolve it
--- to a signed URL on demand (see getSignedPhotoUrl in
--- supabase-client-hooks.ts).
+-- Photos of the aircraft attached to a request — either the client at
+-- submission time, or an admin while physically at the aircraft, both
+-- uploaded to the aircraft-photos storage bucket below under
+-- <request's client_id>/<request_id>/<filename>. Always the owning
+-- client's id as the folder prefix regardless of who actually uploads —
+-- the storage RLS policy grants read/write to that folder's owner OR an
+-- admin, so using the client's id (not the uploader's) is what lets the
+-- client read back a photo an admin uploaded, and vice versa. `url`
+-- stores that storage path, not a public URL — the bucket is private,
+-- so callers resolve it to a signed URL on demand (see getSignedPhotoUrl
+-- in supabase-client-hooks.ts).
 create table request_photos (
   id uuid primary key default gen_random_uuid(),
   request_id uuid not null references service_requests (id) on delete cascade,

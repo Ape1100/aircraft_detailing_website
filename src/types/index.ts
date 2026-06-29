@@ -110,9 +110,14 @@ export interface ServiceRequest {
   airportLocation: string;
   fboName?: string;
   notes?: string;
+  /** An admin's price-adjustment justification and aircraft-condition
+   * observations — deliberately separate from the client's own `notes`
+   * above, and never shown in the client portal. */
+  adminNotes?: string;
   estimateLow?: number;
   estimateHigh?: number;
   createdAt: string;
+  photoCount?: number;
 }
 
 export interface Quote {

@@ -1,16 +1,19 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RequestStatusBadge } from "@/components/aviation/RequestStatusBadge";
-import { useAdminClients, useAdminRequests } from "@/lib/supabase-client-hooks";
+import { RequestDetailDialog } from "@/components/admin/RequestDetailDialog";
+import { useAdminClients, useAdminRequests, type AdminServiceRequest } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminDashboard() {
   const { onboarding, dismissSetupTour } = useSettings();
   const { data: clients } = useAdminClients();
-  const { data: requests } = useAdminRequests();
+  const { data: requests, refetch } = useAdminRequests();
+  const [selected, setSelected] = useState<AdminServiceRequest | null>(null);
   const aircraftOnFile = clients.reduce((sum, c) => sum + c.aircraftCount, 0);
   const openRequests = requests.filter((r) => !["completed", "paid", "archived", "cancelled"].includes(r.status));
   const showTourBanner = !onboarding.setupCompleted && !onboarding.tourDismissed;
@@ -66,7 +69,12 @@ export default function AdminDashboard() {
             <p className="px-6 py-4 text-sm text-steel">No service requests yet.</p>
           ) : (
             requests.slice(0, 8).map((r) => (
-              <div key={r.id} className="flex items-center justify-between px-6 py-4">
+              <button
+                type="button"
+                key={r.id}
+                onClick={() => setSelected(r)}
+                className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-paperDim"
+              >
                 <div>
                   <p className="text-sm font-medium text-ink">
                     {r.aircraft.tailNumber} — {r.aircraft.make} {r.aircraft.model}
@@ -74,11 +82,23 @@ export default function AdminDashboard() {
                   <p className="text-xs text-steel2">{formatDate(r.createdAt)}</p>
                 </div>
                 <RequestStatusBadge status={r.status} />
-              </div>
+              </button>
             ))
           )}
         </CardContent>
       </Card>
+
+      <RequestDetailDialog
+        request={selected}
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+        onUpdated={() => {
+          refetch();
+          setSelected(null);
+        }}
+      />
     </div>
   );
 }

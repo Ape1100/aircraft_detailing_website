@@ -96,9 +96,15 @@ export function useClientAircraft() {
 
 export function useClientRequests() {
   const fetcher = useCallback(async (userId: string) => {
+    // Explicit column list — deliberately NOT select("*") — RLS is
+    // row-level only, not column-level, so a "*" select here would let a
+    // client read their own row's admin_notes (the row, including that
+    // column, genuinely satisfies their "owner or admin" read policy).
     const { data, error } = await supabase
       .from("service_requests")
-      .select("*, service_items(service_code)")
+      .select(
+        "id, aircraft_id, client_id, status, preferred_date, scheduled_date, airport_location, fbo_name, notes, estimate_low, estimate_high, created_at, service_items(service_code), request_photos(id)"
+      )
       .eq("client_id", userId)
       .order("created_at", { ascending: false });
 
@@ -110,6 +116,7 @@ export function useClientRequests() {
       ...row,
       services:
         row.services?.length > 0 ? row.services : row.serviceItems?.map((item: any) => item.serviceCode) ?? [],
+      photoCount: row.requestPhotos?.length ?? 0,
     })) as ServiceRequest[];
   }, []);
 
@@ -317,6 +324,8 @@ export function useAdminClientDetail(clientId: string | null) {
   const [requests, setRequests] = useState<AdminServiceRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
   useEffect(() => {
     if (!clientId) {
@@ -332,7 +341,7 @@ export function useAdminClientDetail(clientId: string | null) {
       supabase.from("aircraft").select("*").eq("owner_id", clientId).order("created_at", { ascending: false }),
       supabase
         .from("service_requests")
-        .select("*, aircraft(tail_number,make,model), service_items(service_code)")
+        .select("*, aircraft(tail_number,make,model), service_items(service_code), request_photos(id)")
         .eq("client_id", clientId)
         .order("created_at", { ascending: false }),
     ])
@@ -348,7 +357,7 @@ export function useAdminClientDetail(clientId: string | null) {
               row.services?.length > 0 ? row.services : row.serviceItems?.map((item: any) => item.serviceCode) ?? [],
             aircraft: row.aircraft,
             clientName: "",
-            photoCount: 0,
+            photoCount: row.requestPhotos?.length ?? 0,
           })) as AdminServiceRequest[]
         );
       })
@@ -358,9 +367,9 @@ export function useAdminClientDetail(clientId: string | null) {
       .finally(() => {
         setLoading(false);
       });
-  }, [clientId]);
+  }, [clientId, version]);
 
-  return { aircraft, requests, loading, error };
+  return { aircraft, requests, loading, error, refetch };
 }
 
 /** Single mutation covering every admin-side request transition: editing
@@ -374,6 +383,7 @@ export async function updateServiceRequest(
     estimateHigh: number | null;
     status: RequestStatus;
     scheduledDate: string | null;
+    adminNotes: string | null;
   }>
 ) {
   const payload: Record<string, unknown> = {};
@@ -381,6 +391,7 @@ export async function updateServiceRequest(
   if ("estimateHigh" in fields) payload.estimate_high = fields.estimateHigh;
   if ("status" in fields) payload.status = fields.status;
   if ("scheduledDate" in fields) payload.scheduled_date = fields.scheduledDate;
+  if ("adminNotes" in fields) payload.admin_notes = fields.adminNotes;
 
   const { error } = await supabase.from("service_requests").update(payload).eq("id", requestId);
   if (error) {
@@ -470,15 +481,18 @@ export async function createServiceRequest(
 }
 
 /** Uploads each file to the (private) aircraft-photos bucket under
- * <userId>/<requestId>/<filename> — that folder convention is required by
- * the bucket's "owner folder or admin" storage RLS policy, which checks
- * that the first path segment equals auth.uid(). Inserts one
+ * <ownerId>/<requestId>/<filename>. `ownerId` must be the request's
+ * *owning client* id, NOT necessarily whoever is actually uploading —
+ * the storage RLS policy grants read/write to that folder's owner OR an
+ * admin, so when an admin uploads on a client's behalf (e.g. while
+ * physically at the aircraft), using the admin's own id here would make
+ * the client unable to read their own request's photos back. Inserts one
  * request_photos row per successful upload, storing the storage path
  * (not a public URL, since the bucket is private — see
- * getSignedPhotoUrl for how admins resolve it for viewing). */
-export async function uploadRequestPhotos(userId: string, requestId: string, files: File[]) {
+ * getSignedPhotoUrl for resolving it for viewing). */
+export async function uploadRequestPhotos(ownerId: string, requestId: string, files: File[]) {
   for (const file of files) {
-    const path = `${userId}/${requestId}/${Date.now()}-${file.name}`;
+    const path = `${ownerId}/${requestId}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from("aircraft-photos").upload(path, file);
     if (uploadError) {
       throw uploadError;
