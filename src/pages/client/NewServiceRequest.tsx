@@ -10,11 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useAuth } from "@/lib/auth-provider";
 import { createServiceRequest, uploadRequestPhotos, useClientAircraft } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
+import { calculateEstimate } from "@/lib/pricing-engine";
 import { cn } from "@/lib/utils";
 
 export default function NewServiceRequest() {
   const navigate = useNavigate();
-  const { services } = useSettings();
+  const { services, pricingConfig } = useSettings();
   const { session } = useAuth();
   const { data: aircraft } = useClientAircraft();
   const [aircraftId, setAircraftId] = useState("");
@@ -78,6 +79,30 @@ export default function NewServiceRequest() {
               setError(null);
               setSubmitting(true);
               try {
+                // Rough starting estimate so the admin isn't reviewing a
+                // blank estimate on a brand new request — same engine the
+                // public Estimate Wizard uses, with reasonable defaults for
+                // the inputs this simpler form doesn't ask for (condition,
+                // travel distance). The admin can adjust before confirming.
+                const selectedAircraft = aircraft.find((a) => a.id === aircraftId);
+                const estimate = selectedAircraft
+                  ? calculateEstimate(
+                      {
+                        category: selectedAircraft.category,
+                        make: selectedAircraft.make,
+                        model: selectedAircraft.model,
+                        condition: ["good"],
+                        services: selectedServices,
+                        airport: airportLocation,
+                        rampParked: !selectedAircraft.hangared,
+                        travelDistanceMiles: 0,
+                        photoCount: photos.length,
+                      },
+                      services,
+                      pricingConfig
+                    )
+                  : null;
+
                 const requestId = await createServiceRequest(
                   session.user.id,
                   aircraftId,
@@ -85,7 +110,9 @@ export default function NewServiceRequest() {
                   preferredDate || null,
                   airportLocation,
                   fboName || null,
-                  notes || null
+                  notes || null,
+                  estimate ? estimate.low : null,
+                  estimate ? estimate.high : null
                 );
                 if (photos.length > 0) {
                   await uploadRequestPhotos(session.user.id, requestId, photos);

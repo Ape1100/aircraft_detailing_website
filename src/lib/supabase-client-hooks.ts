@@ -323,7 +323,9 @@ export async function createServiceRequest(
   preferredDate: string | null,
   airportLocation: string,
   fboName: string | null,
-  notes: string | null
+  notes: string | null,
+  estimateLow: number | null = null,
+  estimateHigh: number | null = null
 ) {
   const { data, error } = await supabase
     .from("service_requests")
@@ -336,6 +338,8 @@ export async function createServiceRequest(
         fbo_name: fboName || null,
         notes: notes || null,
         status: "requested",
+        estimate_low: estimateLow,
+        estimate_high: estimateHigh,
       },
     ])
     .select("id")
