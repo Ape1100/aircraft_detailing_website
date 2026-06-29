@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MOCK_MEMBERSHIP } from "@/lib/mock-data";
+import { useClientMembership } from "@/lib/supabase-client-hooks";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { startMembershipSubscription } from "@/lib/stripe-client";
 
@@ -16,12 +16,18 @@ const TIER_LABEL: Record<string, string> = {
 
 export default function Membership() {
   const [notice, setNotice] = useState<string | null>(null);
+  const { membership } = useClientMembership();
 
   async function handleManage() {
+    if (!membership) {
+      setNotice("No membership found yet. Create one from the admin portal or request a plan.");
+      return;
+    }
+
     try {
-      await startMembershipSubscription(MOCK_MEMBERSHIP.tier);
-    } catch {
-      setNotice("Subscription management isn't connected yet — see README for Stripe setup.");
+      await startMembershipSubscription(membership.tier);
+    } catch (err) {
+      setNotice((err as Error).message || "Failed to start subscription session. Please try again.");
     }
   }
 
@@ -41,14 +47,18 @@ export default function Membership() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <div>
-            <CardTitle>{TIER_LABEL[MOCK_MEMBERSHIP.tier]}</CardTitle>
-            <CardDescription>Active since {formatDate(MOCK_MEMBERSHIP.startedAt)}</CardDescription>
+            <CardTitle>{membership ? TIER_LABEL[membership.tier] : "No active membership"}</CardTitle>
+            <CardDescription>
+              {membership ? `Active since ${formatDate(membership.startedAt)}` : "No membership has been activated yet."}
+            </CardDescription>
           </div>
-          <Badge variant="green">{MOCK_MEMBERSHIP.status}</Badge>
+          <Badge variant={membership?.status === "active" ? "green" : "amber"}>
+            {membership?.status ?? "none"}
+          </Badge>
         </CardHeader>
         <CardContent className="space-y-5">
           <p className="font-display text-3xl font-semibold text-ink">
-            {MOCK_MEMBERSHIP.monthlyAmount ? `${formatCurrency(MOCK_MEMBERSHIP.monthlyAmount)}/mo` : "Custom pricing"}
+            {membership?.monthlyAmount ? `${formatCurrency(membership.monthlyAmount)} / mo` : "Custom pricing"}
           </p>
           <ul className="space-y-2 text-sm text-steel">
             <li className="flex items-center gap-2"><Check className="h-4 w-4 text-navgreen" /> Monthly exterior wash</li>

@@ -7,16 +7,33 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { MOCK_AIRCRAFT } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-provider";
+import { createServiceRequest, useClientAircraft } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
 
 export default function NewServiceRequest() {
   const navigate = useNavigate();
   const { services } = useSettings();
-  const [aircraftId, setAircraftId] = useState(MOCK_AIRCRAFT[0]?.id ?? "");
+  const { session } = useAuth();
+  const { data: aircraft } = useClientAircraft();
+  const [aircraftId, setAircraftId] = useState("");
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [preferredDate, setPreferredDate] = useState<string>("");
+  const [airportLocation, setAirportLocation] = useState("");
+  const [fboName, setFboName] = useState("");
+  const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const defaultAircraftId = aircraft[0]?.id ?? "";
+
+  useState(() => {
+    if (!aircraftId && defaultAircraftId) {
+      setAircraftId(defaultAircraftId);
+    }
+  });
 
   function toggleService(code: string) {
     setSelectedServices((s) => (s.includes(code) ? s.filter((c) => c !== code) : [...s, code]));
@@ -53,9 +70,30 @@ export default function NewServiceRequest() {
         <CardContent>
           <form
             className="space-y-6"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              setSubmitted(true);
+              if (!session?.user?.id) {
+                setError("You must be signed in to submit a request.");
+                return;
+              }
+              setError(null);
+              setSubmitting(true);
+              try {
+                await createServiceRequest(
+                  session.user.id,
+                  aircraftId,
+                  selectedServices,
+                  preferredDate || null,
+                  airportLocation,
+                  fboName || null,
+                  notes || null
+                );
+                setSubmitted(true);
+              } catch (err) {
+                setError((err as Error).message || "Failed to submit request. Please try again.");
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
             <div>
@@ -65,7 +103,7 @@ export default function NewServiceRequest() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MOCK_AIRCRAFT.map((a) => (
+                  {aircraft.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.tailNumber} — {a.make} {a.model}
                     </SelectItem>
@@ -97,17 +135,54 @@ export default function NewServiceRequest() {
 
             <div>
               <Label htmlFor="date-input">Preferred date</Label>
-              <Input id="date-input" type="date" className="max-w-xs" />
+              <Input
+                id="date-input"
+                type="date"
+                className="max-w-xs"
+                value={preferredDate}
+                onChange={(event) => setPreferredDate(event.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="airport-input">Airport / location</Label>
+              <Input
+                id="airport-input"
+                required
+                value={airportLocation}
+                onChange={(event) => setAirportLocation(event.target.value)}
+                placeholder="KSAC — Sacramento Executive"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="fbo-input">FBO name (optional)</Label>
+              <Input
+                id="fbo-input"
+                value={fboName}
+                onChange={(event) => setFboName(event.target.value)}
+                placeholder="Sacramento Jet Center"
+              />
             </div>
 
             <div>
               <Label htmlFor="notes-input">Notes</Label>
-              <Textarea id="notes-input" placeholder="Anything we should know?" />
+              <Textarea
+                id="notes-input"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Anything we should know?"
+              />
             </div>
 
-            <Button type="submit" variant="amber" disabled={selectedServices.length === 0}>
-              Submit Request
+            <Button
+              type="submit"
+              variant="amber"
+              disabled={submitting || selectedServices.length === 0 || !aircraftId || !airportLocation}
+            >
+              {submitting ? "Submitting…" : "Submit Request"}
             </Button>
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
           </form>
         </CardContent>
       </Card>

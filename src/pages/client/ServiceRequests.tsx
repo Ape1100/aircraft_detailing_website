@@ -3,12 +3,15 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RequestStatusBadge } from "@/components/aviation/RequestStatusBadge";
-import { MOCK_AIRCRAFT, MOCK_REQUESTS } from "@/lib/mock-data";
+import { useClientAircraft, useClientRequests } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export default function ServiceRequests() {
   const { services } = useSettings();
+  const { data: aircraft } = useClientAircraft();
+  const { data: requests } = useClientRequests();
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -25,12 +28,12 @@ export default function ServiceRequests() {
 
       <Card>
         <CardContent className="divide-y divide-ink/10 p-0">
-          {MOCK_REQUESTS.map((r) => {
-            const aircraft = MOCK_AIRCRAFT.find((a) => a.id === r.aircraftId);
+          {requests.map((r) => {
+            const aircraftItem = aircraft.find((a) => a.id === r.aircraftId);
             return (
               <div key={r.id} className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-medium text-ink">{aircraft?.tailNumber} — {aircraft?.make} {aircraft?.model}</p>
+                  <p className="font-medium text-ink">{aircraftItem?.tailNumber} — {aircraftItem?.make} {aircraftItem?.model}</p>
                   <p className="text-sm text-steel">
                     {r.services.map((s) => services.find((sc) => sc.code === s)?.name ?? s).join(", ")}
                   </p>

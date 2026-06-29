@@ -47,6 +47,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2026-06-24.dahlia",
 });
 
+/** Postgres unique-violation code. The select-then-insert checks below race
+ * against a near-simultaneous duplicate delivery (see
+ * payments_invoice_charge_unique / memberships_subscription_unique in
+ * schema.sql, which are the actual backstop) — when that race is lost, this
+ * tells the insert's failure apart from a real error so it can be treated
+ * as "already processed" instead of a 500. */
+function isUniqueViolation(error: { code?: string } | null): boolean {
+  return error?.code === "23505";
+}
+
 function asId(value: string | Stripe.Subscription | Stripe.PaymentIntent | null | undefined): string | undefined {
   if (!value) return undefined;
   return typeof value === "string" ? value : value.id;
@@ -82,35 +92,66 @@ export const handler: Handler = async (event) => {
         const metadata = session.metadata ?? {};
         const chargedAmount = (session.amount_total ?? 0) / 100;
 
+        // Stripe explicitly documents that webhook events may be delivered
+        // more than once for the same event, so every branch below must be
+        // idempotent: check whether this event's effect was already applied
+        // before writing, rather than assuming a single delivery.
         if (metadata.invoiceId) {
-          const { error: invoiceError } = await supabase
-            .from("invoices")
-            .update({ status: "paid" })
-            .eq("id", metadata.invoiceId);
-          if (invoiceError) throw invoiceError;
+          const chargeId = asId(session.payment_intent);
+          const { data: existingPayment } = await supabase
+            .from("payments")
+            .select("id")
+            .eq("invoice_id", metadata.invoiceId)
+            .eq("stripe_charge_id", chargeId ?? "")
+            .maybeSingle();
 
-          const { error: paymentError } = await supabase.from("payments").insert({
-            invoice_id: metadata.invoiceId,
-            amount: chargedAmount,
-            method: "card",
-            stripe_charge_id: asId(session.payment_intent),
-          });
-          if (paymentError) throw paymentError;
+          if (!existingPayment) {
+            const { error: invoiceError } = await supabase
+              .from("invoices")
+              .update({ status: "paid" })
+              .eq("id", metadata.invoiceId);
+            if (invoiceError) throw invoiceError;
+
+            const { error: paymentError } = await supabase.from("payments").insert({
+              invoice_id: metadata.invoiceId,
+              amount: chargedAmount,
+              method: "card",
+              stripe_charge_id: chargeId,
+            });
+            if (paymentError && !isUniqueViolation(paymentError)) throw paymentError;
+          }
         } else if (metadata.customQuoteId) {
-          const { error } = await supabase
+          const { data: quote } = await supabase
             .from("custom_quotes")
-            .update({ paid_at: new Date().toISOString(), stripe_checkout_session_id: session.id })
-            .eq("id", metadata.customQuoteId);
-          if (error) throw error;
+            .select("paid_at")
+            .eq("id", metadata.customQuoteId)
+            .maybeSingle();
+
+          if (!quote?.paid_at) {
+            const { error } = await supabase
+              .from("custom_quotes")
+              .update({ paid_at: new Date().toISOString(), stripe_checkout_session_id: session.id })
+              .eq("id", metadata.customQuoteId);
+            if (error) throw error;
+          }
         } else if (session.mode === "subscription" && metadata.tier && metadata.clientId) {
-          const { error } = await supabase.from("memberships").insert({
-            client_id: metadata.clientId,
-            tier: metadata.tier,
-            monthly_amount: chargedAmount,
-            status: "active",
-            stripe_subscription_id: asId(session.subscription),
-          });
-          if (error) throw error;
+          const subscriptionId = asId(session.subscription);
+          const { data: existingMembership } = await supabase
+            .from("memberships")
+            .select("id")
+            .eq("stripe_subscription_id", subscriptionId ?? "")
+            .maybeSingle();
+
+          if (!existingMembership) {
+            const { error } = await supabase.from("memberships").insert({
+              client_id: metadata.clientId,
+              tier: metadata.tier,
+              monthly_amount: chargedAmount,
+              status: "active",
+              stripe_subscription_id: subscriptionId,
+            });
+            if (error && !isUniqueViolation(error)) throw error;
+          }
         }
         break;
       }

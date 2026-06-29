@@ -2,9 +2,11 @@ import { Plane } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NNumberPlate } from "@/components/aviation/NNumberPlate";
-import { MOCK_AIRCRAFT } from "@/lib/mock-data";
+import { useClientAircraft } from "@/lib/supabase-client-hooks";
 
 export default function MyAircraft() {
+  const { data: aircraft } = useClientAircraft();
+
   return (
     <div className="space-y-6">
       <div>
@@ -13,7 +15,7 @@ export default function MyAircraft() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        {MOCK_AIRCRAFT.map((a) => (
+        {aircraft.map((a) => (
           <Card key={a.id}>
             <CardHeader className="flex-row items-start justify-between">
               <div>

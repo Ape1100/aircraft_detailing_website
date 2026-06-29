@@ -143,6 +143,15 @@ create table payments (
   stripe_charge_id text
 );
 
+-- Stripe documents that webhook events may be delivered more than once;
+-- stripe-webhook.ts checks for an existing row before inserting, but that
+-- check-then-insert is not atomic against a near-simultaneous duplicate
+-- delivery. This constraint is the actual backstop — a second insert for
+-- the same charge fails with 23505, which the webhook handler treats as
+-- "already processed" rather than a real error.
+create unique index payments_invoice_charge_unique on payments (invoice_id, stripe_charge_id)
+  where stripe_charge_id is not null;
+
 create table memberships (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references profiles (id) on delete cascade,
@@ -152,6 +161,11 @@ create table memberships (
   started_at timestamptz not null default now(),
   stripe_subscription_id text
 );
+
+-- Same rationale as payments_invoice_charge_unique above, for the
+-- subscription-created path in stripe-webhook.ts.
+create unique index memberships_subscription_unique on memberships (stripe_subscription_id)
+  where stripe_subscription_id is not null;
 
 create table detailing_reports (
   id uuid primary key default gen_random_uuid(),

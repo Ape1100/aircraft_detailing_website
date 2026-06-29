@@ -1,7 +1,7 @@
 import { Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MOCK_AIRCRAFT, MOCK_REPORTS } from "@/lib/mock-data";
+import { useClientAircraft, useClientReports } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { formatDate } from "@/lib/utils";
 
@@ -20,6 +20,8 @@ const ISSUE_LABELS: Record<string, string> = {
 
 export default function Reports() {
   const { services } = useSettings();
+  const { data: aircraft } = useClientAircraft();
+  const { data: reports } = useClientReports();
   return (
     <div className="space-y-6">
       <div>
@@ -27,12 +29,12 @@ export default function Reports() {
         <p className="text-sm text-steel">Photo-documented condition reports from every visit.</p>
       </div>
 
-      {MOCK_REPORTS.map((report) => {
-        const aircraft = MOCK_AIRCRAFT.find((a) => a.id === report.aircraftId);
+      {reports.map((report) => {
+        const aircraftItem = aircraft.find((a) => a.id === report.aircraftId);
         return (
           <Card key={report.id}>
             <CardHeader>
-              <CardTitle>{aircraft?.tailNumber} — {formatDate(report.serviceDate)}</CardTitle>
+              <CardTitle>{aircraftItem?.tailNumber ?? "Aircraft"} — {formatDate(report.serviceDate)}</CardTitle>
               <CardDescription>{report.location}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">

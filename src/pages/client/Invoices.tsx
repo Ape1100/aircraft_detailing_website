@@ -23,8 +23,8 @@ export default function Invoices() {
   async function handlePay(invoiceId: string) {
     try {
       await startInvoiceCheckout(invoiceId);
-    } catch {
-      setNotice("Online payment isn't connected yet — see README for Stripe setup.");
+    } catch (err) {
+      setNotice((err as Error).message || "Failed to start checkout session. Please try again.");
     }
   }
 
