@@ -225,6 +225,7 @@ create table detailing_reports (
   client_id uuid not null references profiles (id) on delete cascade,
   service_date date not null,
   location text not null,
+  services_performed text[],
   products_used text[],
   technician_notes text,
   recommendations text,

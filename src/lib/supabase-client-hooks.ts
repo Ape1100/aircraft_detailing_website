@@ -8,6 +8,7 @@ import type {
   DetailingReport,
   Invoice,
   Membership,
+  ObservedIssueCategory,
   RequestStatus,
   ServiceDefinition,
   ServiceRequest,
@@ -29,6 +30,13 @@ export interface AdminClient {
   phone: string | null;
   company: string | null;
   aircraftCount: number;
+}
+
+/** An aircraft as seen by the admin Report Builder's picker — joined
+ * with its owner's id/name so saving a report can derive client_id from
+ * whichever aircraft is selected, without a second lookup. */
+export interface AdminAircraft extends Aircraft {
+  ownerName: string;
 }
 
 export interface AdminInvoice extends Invoice {
@@ -269,6 +277,30 @@ export function useAdminClients() {
   }, []);
 
   return useSupabaseList<AdminClient>(fetcher);
+}
+
+/** Every aircraft across every client, for the admin Report Builder's
+ * aircraft picker. Same RLS reasoning as the other admin hooks — no
+ * owner_id filter, "Aircraft: owner or admin" already grants an admin
+ * session visibility into every row. */
+export function useAdminAircraft() {
+  const fetcher = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("aircraft")
+      .select("*, profiles(name)")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return camelizeKeys<any[]>(data ?? []).map((row: any) => ({
+      ...row,
+      ownerName: row.profiles?.name ?? "Unknown client",
+    })) as AdminAircraft[];
+  }, []);
+
+  return useSupabaseList<AdminAircraft>(fetcher);
 }
 
 /** All invoices, for the admin Invoices page. Same RLS reasoning as
@@ -514,6 +546,93 @@ export async function getSignedPhotoUrl(path: string, expiresInSeconds = 3600) {
   const { data, error } = await supabase.storage.from("aircraft-photos").createSignedUrl(path, expiresInSeconds);
   if (error || !data?.signedUrl) {
     throw error ?? new Error("Failed to sign photo URL");
+  }
+  return data.signedUrl;
+}
+
+/** Creates a detailing report plus its observed_issues rows in one call.
+ * Returns the new report's id so the caller can immediately attach
+ * photos to it (uploadReportPhoto below) and generate a PDF. */
+export async function createDetailingReport(report: {
+  aircraftId: string;
+  clientId: string;
+  serviceDate: string;
+  location: string;
+  servicesPerformed: string[];
+  productsUsed: string[];
+  technicianNotes: string | null;
+  recommendations: string | null;
+  observedIssues: { category: ObservedIssueCategory; note: string }[];
+}) {
+  const { data, error } = await supabase
+    .from("detailing_reports")
+    .insert({
+      aircraft_id: report.aircraftId,
+      client_id: report.clientId,
+      service_date: report.serviceDate,
+      location: report.location,
+      services_performed: report.servicesPerformed,
+      products_used: report.productsUsed,
+      technician_notes: report.technicianNotes,
+      recommendations: report.recommendations,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    throw error ?? new Error("Failed to create report");
+  }
+
+  const reportId = data.id as string;
+
+  if (report.observedIssues.length > 0) {
+    const { error: issuesError } = await supabase.from("observed_issues").insert(
+      report.observedIssues.map((issue) => ({
+        report_id: reportId,
+        category: issue.category,
+        note: issue.note,
+      }))
+    );
+    if (issuesError) {
+      throw issuesError;
+    }
+  }
+
+  return reportId;
+}
+
+/** Uploads to the (private) report-photos bucket under
+ * <ownerId>/<reportId>/<filename> — same owner-id-not-uploader's-id
+ * reasoning as uploadRequestPhotos, since the storage RLS policy is
+ * shared across every bucket in this schema. */
+export async function uploadReportPhoto(
+  ownerId: string,
+  reportId: string,
+  file: File,
+  kind: "before" | "after"
+) {
+  const path = `${ownerId}/${reportId}/${Date.now()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("report-photos").upload(path, file);
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const { error: insertError } = await supabase.from("report_photos").insert({
+    report_id: reportId,
+    url: path,
+    kind,
+  });
+  if (insertError) {
+    throw insertError;
+  }
+}
+
+/** Resolves a report_photos.url (a storage path) to a temporary signed
+ * URL, since the report-photos bucket is private. */
+export async function getSignedReportPhotoUrl(path: string, expiresInSeconds = 3600) {
+  const { data, error } = await supabase.storage.from("report-photos").createSignedUrl(path, expiresInSeconds);
+  if (error || !data?.signedUrl) {
+    throw error ?? new Error("Failed to sign report photo URL");
   }
   return data.signedUrl;
 }

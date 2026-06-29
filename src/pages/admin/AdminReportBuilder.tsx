@@ -1,15 +1,22 @@
-import { useState } from "react";
-import { Camera, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Camera, Download, FileText, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { MOCK_AIRCRAFT } from "@/lib/mock-data";
+import {
+  createDetailingReport,
+  getSignedReportPhotoUrl,
+  uploadReportPhoto,
+  useAdminAircraft,
+} from "@/lib/supabase-client-hooks";
+import { supabase } from "@/lib/supabase-client";
 import { useSettings } from "@/lib/settings-store";
+import { generateConditionReportPdf, generateServiceReportPdf, type ReportPdfPhoto } from "@/lib/pdf-generator";
 import { REQUIRED_REPORT_DISCLAIMER, type ObservedIssueCategory } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 const ISSUE_OPTIONS: { value: ObservedIssueCategory; label: string }[] = [
   { value: "paint_chips", label: "Paint Chips" },
@@ -30,9 +37,17 @@ interface DraftIssue {
   note: string;
 }
 
+interface PendingPhoto {
+  id: string;
+  file: File;
+  kind: "before" | "after";
+  previewUrl: string;
+}
+
 export default function AdminReportBuilder() {
-  const { services } = useSettings();
-  const [aircraftId, setAircraftId] = useState(MOCK_AIRCRAFT[0]?.id ?? "");
+  const { services, businessSettings } = useSettings();
+  const { data: aircraft } = useAdminAircraft();
+  const [aircraftId, setAircraftId] = useState("");
   const [serviceDate, setServiceDate] = useState("");
   const [location, setLocation] = useState("");
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -40,8 +55,19 @@ export default function AdminReportBuilder() {
   const [technicianNotes, setTechnicianNotes] = useState("");
   const [recommendations, setRecommendations] = useState("");
   const [issues, setIssues] = useState<DraftIssue[]>([]);
-  const [photoCount, setPhotoCount] = useState(0);
-  const [saved, setSaved] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedReportId, setSavedReportId] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<"service" | "condition" | null>(null);
+
+  useEffect(() => {
+    if (!aircraftId && aircraft[0]?.id) {
+      setAircraftId(aircraft[0].id);
+    }
+  }, [aircraft, aircraftId]);
+
+  const selectedAircraft = aircraft.find((a) => a.id === aircraftId);
 
   function toggleService(code: string) {
     setSelectedServices((s) => (s.includes(code) ? s.filter((c) => c !== code) : [...s, code]));
@@ -56,6 +82,112 @@ export default function AdminReportBuilder() {
     setIssues((i) => i.filter((it) => it.id !== id));
   }
 
+  function addPendingPhoto(file: File, kind: "before" | "after") {
+    setPendingPhotos((p) => [...p, { id: crypto.randomUUID(), file, kind, previewUrl: URL.createObjectURL(file) }]);
+  }
+  function removePendingPhoto(id: string) {
+    setPendingPhotos((p) => p.filter((ph) => ph.id !== id));
+  }
+
+  async function handleSave() {
+    if (!selectedAircraft) {
+      setError("Select an aircraft first.");
+      return;
+    }
+    if (!serviceDate || !location) {
+      setError("Service date and location are required.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const reportId = await createDetailingReport({
+        aircraftId: selectedAircraft.id,
+        clientId: selectedAircraft.ownerId,
+        serviceDate,
+        location,
+        servicesPerformed: selectedServices,
+        productsUsed: products.filter((p) => p.trim().length > 0),
+        technicianNotes: technicianNotes || null,
+        recommendations: recommendations || null,
+        observedIssues: issues.map((i) => ({ category: i.category, note: i.note })),
+      });
+
+      for (const photo of pendingPhotos) {
+        await uploadReportPhoto(selectedAircraft.ownerId, reportId, photo.file, photo.kind);
+      }
+
+      setSavedReportId(reportId);
+    } catch (err) {
+      setError((err as Error).message || "Failed to save report. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function loadSignedPhotos(reportId: string): Promise<ReportPdfPhoto[]> {
+    const { data } = await supabase.from("report_photos").select("url, kind").eq("report_id", reportId);
+    const photos = await Promise.all(
+      (data ?? []).map(async (row) => ({
+        signedUrl: await getSignedReportPhotoUrl(row.url),
+        kind: row.kind as ReportPdfPhoto["kind"],
+      }))
+    );
+    return photos;
+  }
+
+  async function handleDownloadServiceReport() {
+    if (!savedReportId || !selectedAircraft) return;
+    setGeneratingPdf("service");
+    try {
+      const photos = await loadSignedPhotos(savedReportId);
+      await generateServiceReportPdf({
+        businessSettings,
+        aircraftLabel: `${selectedAircraft.tailNumber} — ${selectedAircraft.make} ${selectedAircraft.model}`,
+        clientName: selectedAircraft.ownerName,
+        serviceDate: formatDate(serviceDate),
+        location,
+        servicesPerformed: selectedServices.map((s) => services.find((sc) => sc.code === s)?.name ?? s),
+        productsUsed: products.filter((p) => p.trim().length > 0),
+        technicianNotes: technicianNotes || null,
+        recommendations: recommendations || null,
+        observedIssues: issues.map((i) => ({ category: i.category, note: i.note })),
+        photos,
+        disclaimer: REQUIRED_REPORT_DISCLAIMER,
+      });
+    } catch (err) {
+      setError((err as Error).message || "Failed to generate PDF.");
+    } finally {
+      setGeneratingPdf(null);
+    }
+  }
+
+  async function handlePrintConditionReport() {
+    if (!savedReportId || !selectedAircraft) return;
+    setGeneratingPdf("condition");
+    try {
+      const photos = await loadSignedPhotos(savedReportId);
+      await generateConditionReportPdf({
+        businessSettings,
+        aircraftLabel: `${selectedAircraft.tailNumber} — ${selectedAircraft.make} ${selectedAircraft.model}`,
+        clientName: selectedAircraft.ownerName,
+        serviceDate: formatDate(serviceDate),
+        location,
+        servicesPerformed: [],
+        productsUsed: [],
+        technicianNotes: null,
+        recommendations: null,
+        observedIssues: issues.map((i) => ({ category: i.category, note: i.note })),
+        photos,
+        disclaimer: REQUIRED_REPORT_DISCLAIMER,
+      });
+    } catch (err) {
+      setError((err as Error).message || "Failed to generate PDF.");
+    } finally {
+      setGeneratingPdf(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -63,11 +195,21 @@ export default function AdminReportBuilder() {
         <p className="text-sm text-steel">Document the visit and any observed conditions.</p>
       </div>
 
-      {saved && (
-        <div className="rounded-lg border border-navgreen/30 bg-navgreen/5 px-4 py-3 text-sm text-navgreen">
-          Report saved to the aircraft's history (mock — not yet persisted to a backend).
+      {savedReportId && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-navgreen/30 bg-navgreen/5 px-4 py-3 text-sm text-navgreen">
+          <span>Report saved to the aircraft's history.</span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={generatingPdf === "service"}
+            onClick={handleDownloadServiceReport}
+          >
+            <Download className="h-4 w-4" /> {generatingPdf === "service" ? "Generating…" : "Download PDF"}
+          </Button>
         </div>
       )}
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <Card>
         <CardHeader>
@@ -81,8 +223,8 @@ export default function AdminReportBuilder() {
               <Select value={aircraftId} onValueChange={setAircraftId}>
                 <SelectTrigger id="rb-aircraft"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {MOCK_AIRCRAFT.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>{a.tailNumber} — {a.make} {a.model}</SelectItem>
+                  {aircraft.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.tailNumber} — {a.make} {a.model} ({a.ownerName})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -141,11 +283,23 @@ export default function AdminReportBuilder() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Observed issues</CardTitle>
-          <CardDescription>
-            Appearance-related observations only — not a maintenance finding or airworthiness call.
-          </CardDescription>
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle>Observed issues</CardTitle>
+            <CardDescription>
+              Appearance-related observations only — not a maintenance finding or airworthiness call.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!savedReportId || generatingPdf === "condition"}
+            onClick={handlePrintConditionReport}
+            title={savedReportId ? "Print Condition Report" : "Save the report first"}
+          >
+            <FileText className="h-4 w-4" /> {generatingPdf === "condition" ? "Generating…" : "Print Condition Report"}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {issues.map((issue) => (
@@ -185,15 +339,44 @@ export default function AdminReportBuilder() {
           <div>
             <Label>Before / after photos</Label>
             <div className="flex flex-wrap gap-3">
-              {Array.from({ length: photoCount }).map((_, i) => (
-                <div key={i} className="flex h-20 w-20 items-center justify-center rounded-lg border border-ink/10 bg-paperDim text-steel2">
-                  <Camera className="h-5 w-5" />
+              {pendingPhotos.map((p) => (
+                <div key={p.id} className="relative h-20 w-20">
+                  <img src={p.previewUrl} alt="" className="h-20 w-20 rounded-lg object-cover" />
+                  <span className="absolute bottom-0 left-0 rounded-tr-lg rounded-bl-lg bg-ink/70 px-1.5 py-0.5 text-[10px] capitalize text-paper">
+                    {p.kind}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removePendingPhoto(p.id)}
+                    className="absolute -right-1.5 -top-1.5 rounded-full bg-rust p-0.5 text-paper"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </div>
               ))}
             </div>
-            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => setPhotoCount((c) => c + 1)}>
-              <Camera className="h-4 w-4" /> Add photo (mock upload)
-            </Button>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-sm font-medium text-ink hover:border-ink/30">
+                <Camera className="h-4 w-4" /> Add before photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => Array.from(e.target.files ?? []).forEach((f) => addPendingPhoto(f, "before"))}
+                />
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-sm font-medium text-ink hover:border-ink/30">
+                <Camera className="h-4 w-4" /> Add after photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => Array.from(e.target.files ?? []).forEach((f) => addPendingPhoto(f, "after"))}
+                />
+              </label>
+            </div>
           </div>
           <div>
             <Label htmlFor="rb-recs">Recommendations</Label>
@@ -211,8 +394,8 @@ export default function AdminReportBuilder() {
         </CardContent>
       </Card>
 
-      <Button variant="amber" size="lg" onClick={() => setSaved(true)}>
-        Save Report
+      <Button variant="amber" size="lg" disabled={saving || !!savedReportId} onClick={handleSave}>
+        {saving ? "Saving…" : savedReportId ? "Saved" : "Save Report"}
       </Button>
     </div>
   );
