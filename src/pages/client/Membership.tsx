@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useClientMembership } from "@/lib/supabase-client-hooks";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { startMembershipSubscription } from "@/lib/stripe-client";
+import { openMembershipBillingPortal } from "@/lib/stripe-client";
 
 const TIER_LABEL: Record<string, string> = {
   ramp_ready: "Ramp Ready",
@@ -25,9 +25,14 @@ export default function Membership() {
     }
 
     try {
-      await startMembershipSubscription(membership.tier);
+      // Opens Stripe's Billing Portal for the existing subscription.
+      // Deliberately NOT startMembershipSubscription here — that creates a
+      // brand new Checkout subscription session, which would start a
+      // second parallel subscription (double billing) instead of managing
+      // the one this client already has.
+      await openMembershipBillingPortal();
     } catch (err) {
-      setNotice((err as Error).message || "Failed to start subscription session. Please try again.");
+      setNotice((err as Error).message || "Failed to open billing portal. Please try again.");
     }
   }
 

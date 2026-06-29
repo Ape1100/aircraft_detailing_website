@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase-client";
 import { useAuth } from "./auth-provider";
+import { camelizeKeys } from "./supabase-mappers";
 import type {
   Aircraft,
+  AircraftCategory,
   DetailingReport,
   Invoice,
   Membership,
@@ -14,6 +16,7 @@ function useSupabaseList<T>(fetcher: (userId: string) => Promise<T[]>) {
   const [data, setData] = useState<T[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (loading) {
@@ -40,16 +43,18 @@ function useSupabaseList<T>(fetcher: (userId: string) => Promise<T[]>) {
       .finally(() => {
         setLoadingData(false);
       });
-  }, [loading, session?.user?.id, fetcher]);
+  }, [loading, session?.user?.id, fetcher, version]);
+
+  const refetch = useCallback(() => setVersion((v) => v + 1), []);
 
   return useMemo(
-    () => ({ data, loading: loading || loadingData, error }),
-    [data, error, loading, loadingData]
+    () => ({ data, loading: loading || loadingData, error, refetch }),
+    [data, error, loading, loadingData, refetch]
   );
 }
 
 export function useClientAircraft() {
-  return useSupabaseList<Aircraft>(async (userId) => {
+  const fetcher = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from("aircraft")
       .select("*")
@@ -59,12 +64,14 @@ export function useClientAircraft() {
     if (error) {
       throw error;
     }
-    return data ?? [];
-  });
+    return camelizeKeys<Aircraft[]>(data ?? []);
+  }, []);
+
+  return useSupabaseList<Aircraft>(fetcher);
 }
 
 export function useClientRequests() {
-  return useSupabaseList<ServiceRequest>(async (userId) => {
+  const fetcher = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from("service_requests")
       .select("*, service_items(service_code)")
@@ -75,20 +82,18 @@ export function useClientRequests() {
       throw error;
     }
 
-    return (
-      data ?? []
-    ).map((row: any) => ({
+    return camelizeKeys<any[]>(data ?? []).map((row: any) => ({
       ...row,
       services:
-        row.services?.length > 0
-          ? row.services
-          : row.service_items?.map((item: any) => item.service_code) ?? [],
+        row.services?.length > 0 ? row.services : row.serviceItems?.map((item: any) => item.serviceCode) ?? [],
     })) as ServiceRequest[];
-  });
+  }, []);
+
+  return useSupabaseList<ServiceRequest>(fetcher);
 }
 
 export function useClientInvoices() {
-  return useSupabaseList<Invoice>(async (userId) => {
+  const fetcher = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from("invoices")
       .select("*")
@@ -98,8 +103,10 @@ export function useClientInvoices() {
     if (error) {
       throw error;
     }
-    return data ?? [];
-  });
+    return camelizeKeys<Invoice[]>(data ?? []);
+  }, []);
+
+  return useSupabaseList<Invoice>(fetcher);
 }
 
 export function useClientMembership() {
@@ -136,7 +143,7 @@ export function useClientMembership() {
           throw error;
         }
 
-        setMembership(data ?? null);
+        setMembership(data ? camelizeKeys<Membership>(data) : null);
       } catch (err: unknown) {
         setError((err as { message?: string })?.message ?? String(err));
       } finally {
@@ -154,7 +161,7 @@ export function useClientMembership() {
 }
 
 export function useClientReports() {
-  return useSupabaseList<DetailingReport>(async (userId) => {
+  const fetcher = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from("detailing_reports")
       .select("*, report_photos(*), observed_issues(*)")
@@ -165,14 +172,48 @@ export function useClientReports() {
       throw error;
     }
 
-    return (
-      data ?? []
-    ).map((row: any) => ({
+    return camelizeKeys<any[]>(data ?? []).map((row: any) => ({
       ...row,
-      photos: row.report_photos ?? [],
-      observedIssues: row.observed_issues ?? [],
+      photos: row.reportPhotos ?? [],
+      observedIssues: row.observedIssues ?? [],
     })) as DetailingReport[];
-  });
+  }, []);
+
+  return useSupabaseList<DetailingReport>(fetcher);
+}
+
+export async function addAircraft(
+  ownerId: string,
+  tailNumber: string,
+  make: string,
+  model: string,
+  category: AircraftCategory,
+  year: number | null,
+  homeAirport: string,
+  hangared: boolean
+) {
+  const { data, error } = await supabase
+    .from("aircraft")
+    .insert([
+      {
+        owner_id: ownerId,
+        tail_number: tailNumber,
+        make,
+        model,
+        category,
+        year,
+        home_airport: homeAirport,
+        hangared,
+      },
+    ])
+    .select("id")
+    .single();
+
+  if (error || !data?.id) {
+    throw error ?? new Error("Failed to add aircraft");
+  }
+
+  return data.id as string;
 }
 
 export async function createServiceRequest(

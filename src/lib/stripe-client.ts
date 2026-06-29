@@ -54,3 +54,25 @@ export async function startMembershipSubscription(tier: string) {
   const { url } = await res.json();
   window.location.href = url;
 }
+
+/** For a client who already has an active membership — opens Stripe's
+ * hosted Billing Portal (update payment method, view invoices, cancel)
+ * rather than create-subscription-session, which would start a second
+ * parallel subscription instead of managing the existing one. */
+export async function openMembershipBillingPortal() {
+  const { data } = await supabase.auth.getSession();
+  const clientId = data.session?.user?.id;
+  if (!clientId) throw new Error("You must be signed in to manage a membership.");
+
+  const res = await fetch("/.netlify/functions/create-billing-portal-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId }),
+  });
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: "Failed to open billing portal" }));
+    throw new Error(error);
+  }
+  const { url } = await res.json();
+  window.location.href = url;
+}

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,13 +27,11 @@ export default function NewServiceRequest() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const defaultAircraftId = aircraft[0]?.id ?? "";
-
-  useState(() => {
-    if (!aircraftId && defaultAircraftId) {
-      setAircraftId(defaultAircraftId);
+  useEffect(() => {
+    if (!aircraftId && aircraft[0]?.id) {
+      setAircraftId(aircraft[0].id);
     }
-  });
+  }, [aircraft, aircraftId]);
 
   function toggleService(code: string) {
     setSelectedServices((s) => (s.includes(code) ? s.filter((c) => c !== code) : [...s, code]));
@@ -98,18 +96,28 @@ export default function NewServiceRequest() {
           >
             <div>
               <Label htmlFor="aircraft-select">Aircraft</Label>
-              <Select value={aircraftId} onValueChange={setAircraftId}>
-                <SelectTrigger id="aircraft-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {aircraft.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.tailNumber} — {a.make} {a.model}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {aircraft.length === 0 ? (
+                <p className="mt-1 text-sm text-steel">
+                  You don't have any aircraft on file yet.{" "}
+                  <Link to="/portal/aircraft" className="text-amberDark hover:underline">
+                    Add one first
+                  </Link>{" "}
+                  before requesting service.
+                </p>
+              ) : (
+                <Select value={aircraftId} onValueChange={setAircraftId}>
+                  <SelectTrigger id="aircraft-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {aircraft.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.tailNumber} — {a.make} {a.model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div>
