@@ -31,6 +31,10 @@ export interface AdminClient {
   aircraftCount: number;
 }
 
+export interface AdminInvoice extends Invoice {
+  clientName: string;
+}
+
 function useSupabaseList<T>(fetcher: (userId: string) => Promise<T[]>) {
   const { session, loading } = useAuth();
   const [data, setData] = useState<T[]>([]);
@@ -258,6 +262,50 @@ export function useAdminClients() {
   }, []);
 
   return useSupabaseList<AdminClient>(fetcher);
+}
+
+/** All invoices, for the admin Invoices page. Same RLS reasoning as
+ * useAdminRequests/useAdminClients — "Invoices: owner or admin" already
+ * grants an admin session visibility into every row. */
+export function useAdminInvoices() {
+  const fetcher = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("invoices")
+      .select("*, profiles(name)")
+      .order("issued_at", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return camelizeKeys<any[]>(data ?? []).map((row: any) => ({
+      ...row,
+      clientName: row.profiles?.name ?? "Unknown client",
+    })) as AdminInvoice[];
+  }, []);
+
+  return useSupabaseList<AdminInvoice>(fetcher);
+}
+
+/** Admin-created invoice — request_id is optional since not every charge
+ * traces back to a service request (e.g. a one-off bill). */
+export async function addInvoice(
+  clientId: string,
+  amount: number,
+  depositAmount: number | null,
+  dueAt: string | null,
+  requestId: string | null
+) {
+  const { error } = await supabase.from("invoices").insert({
+    client_id: clientId,
+    request_id: requestId,
+    amount,
+    deposit_amount: depositAmount,
+    due_at: dueAt,
+  });
+  if (error) {
+    throw error;
+  }
 }
 
 /** A specific client's aircraft + full service request history, for the
