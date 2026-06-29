@@ -4,6 +4,7 @@
 
 import { jsPDF } from "jspdf";
 import type { BusinessSettings, ObservedIssueCategory } from "@/types";
+import { formatCurrency } from "@/lib/utils";
 
 const ISSUE_LABELS: Record<ObservedIssueCategory, string> = {
   paint_chips: "Paint Chips",
@@ -23,13 +24,19 @@ export interface ReportPdfPhoto {
   kind: "before" | "after" | "observed_issue";
 }
 
+export interface ReportPdfServicePrice {
+  name: string;
+  finalPrice: number;
+}
+
 export interface ReportPdfData {
   businessSettings: BusinessSettings;
   aircraftLabel: string; // e.g. "N12345 — Cessna 172"
   clientName: string;
   serviceDate: string; // already formatted for display
   location: string;
-  servicesPerformed: string[]; // display names, already resolved
+  servicePrices: ReportPdfServicePrice[];
+  total: number;
   productsUsed: string[];
   technicianNotes: string | null;
   recommendations: string | null;
@@ -42,6 +49,10 @@ const PAGE_WIDTH = 210; // A4 mm
 const MARGIN = 18;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const PAGE_BOTTOM = 280;
+
+function fileBaseName(data: ReportPdfData, prefix: string) {
+  return `${prefix}-${data.aircraftLabel.split(" ")[0]}-${data.serviceDate}.pdf`.replace(/[\s,]+/g, "-");
+}
 
 /** Fetches an (already-signed) image URL and converts it to a data URL,
  * since jsPDF's addImage needs the actual bytes, not a URL it can fetch
@@ -105,6 +116,16 @@ class PdfCursor {
     this.y += 2;
   }
 
+  /** A service name on the left, its price right-aligned — same row. */
+  priceLine(name: string, amount: number, bold = false) {
+    this.ensureSpace(6);
+    this.doc.setFont("helvetica", bold ? "bold" : "normal");
+    this.doc.text(name, MARGIN, this.y);
+    this.doc.text(formatCurrency(amount), PAGE_WIDTH - MARGIN, this.y, { align: "right" });
+    this.doc.setFont("helvetica", "normal");
+    this.y += 6;
+  }
+
   divider() {
     this.ensureSpace(4);
     this.doc.setDrawColor(220);
@@ -159,8 +180,7 @@ function drawHeader(doc: jsPDF, business: BusinessSettings, title: string) {
   doc.setFontSize(10);
 }
 
-/** Full service report: every section of the detailing report. */
-export async function generateServiceReportPdf(data: ReportPdfData): Promise<void> {
+async function buildServiceReportDoc(data: ReportPdfData): Promise<jsPDF> {
   const doc = new jsPDF();
   drawHeader(doc, data.businessSettings, "Detailing Report");
 
@@ -177,9 +197,13 @@ export async function generateServiceReportPdf(data: ReportPdfData): Promise<voi
   cursor.label("Location");
   cursor.paragraph(data.location);
 
-  if (data.servicesPerformed.length > 0) {
+  if (data.servicePrices.length > 0) {
     cursor.heading("Services performed");
-    cursor.paragraph(data.servicesPerformed.join(", "));
+    for (const sp of data.servicePrices) {
+      cursor.priceLine(sp.name, sp.finalPrice);
+    }
+    cursor.divider();
+    cursor.priceLine("Total", data.total, true);
   }
 
   if (data.productsUsed.length > 0) {
@@ -219,14 +243,10 @@ export async function generateServiceReportPdf(data: ReportPdfData): Promise<voi
   cursor.divider();
   cursor.paragraph(data.disclaimer, 8);
 
-  doc.save(`detailing-report-${data.aircraftLabel.split(" ")[0]}-${data.serviceDate}.pdf`.replace(/[\s,]+/g, "-"));
+  return doc;
 }
 
-/** Condition report: aircraft/client identification + observed issues
- * (with their photos) + disclaimer only — deliberately narrower than the
- * full service report, for when only the condition findings need to be
- * shared (e.g. with an owner or broker), not the whole service writeup. */
-export async function generateConditionReportPdf(data: ReportPdfData): Promise<void> {
+async function buildConditionReportDoc(data: ReportPdfData): Promise<jsPDF> {
   const doc = new jsPDF();
   drawHeader(doc, data.businessSettings, "Condition Report");
 
@@ -267,5 +287,37 @@ export async function generateConditionReportPdf(data: ReportPdfData): Promise<v
   cursor.divider();
   cursor.paragraph(data.disclaimer, 8);
 
-  doc.save(`condition-report-${data.aircraftLabel.split(" ")[0]}-${data.serviceDate}.pdf`.replace(/[\s,]+/g, "-"));
+  return doc;
+}
+
+/** Full service report: every section of the detailing report, including
+ * the per-service prices and total. Triggers a browser download. */
+export async function generateServiceReportPdf(data: ReportPdfData): Promise<void> {
+  const doc = await buildServiceReportDoc(data);
+  doc.save(fileBaseName(data, "detailing-report"));
+}
+
+/** Condition report: aircraft/client identification + observed issues
+ * (with their photos) + disclaimer only — deliberately narrower than the
+ * full service report, for when only the condition findings need to be
+ * shared (e.g. with an owner or broker), not the whole service writeup.
+ * Triggers a browser download. */
+export async function generateConditionReportPdf(data: ReportPdfData): Promise<void> {
+  const doc = await buildConditionReportDoc(data);
+  doc.save(fileBaseName(data, "condition-report"));
+}
+
+/** Same content as generateServiceReportPdf, but returns the PDF as a
+ * base64 string instead of triggering a download — for attaching to the
+ * "send to client" email rather than saving locally. */
+export async function getServiceReportPdfBase64(
+  data: ReportPdfData
+): Promise<{ base64: string; filename: string }> {
+  const doc = await buildServiceReportDoc(data);
+  // jsPDF's typed output() overloads don't include a plain "base64"
+  // variant — "datauristring" is typed and gives the same bytes prefixed
+  // with a data: URI header, which we strip off.
+  const dataUri = doc.output("datauristring");
+  const base64 = dataUri.slice(dataUri.indexOf("base64,") + "base64,".length);
+  return { base64, filename: fileBaseName(data, "detailing-report") };
 }

@@ -21,6 +21,7 @@
 // ------------------------------------------------------------------
 
 import type {
+  AircraftCategory,
   AircraftCondition,
   DiscountRule,
   EstimateInput,
@@ -346,6 +347,22 @@ export function applyDiscountRules(
   }
 
   return { total: Math.round(subtotal - discountTotal), applied };
+}
+
+/** Same size + category-complexity multiplier math calculateEstimate
+ * applies per-service internally (steps 1-3), exposed standalone so a
+ * caller that needs one service's base price on its own — e.g. the
+ * Report Builder's per-service price line, which an admin then adjusts
+ * up/down — doesn't have to duplicate the formula or run the full
+ * estimate pipeline (condition modifiers, travel, discounts) just to get
+ * a single starting number. */
+export function calculateServiceBasePrice(
+  service: ServiceDefinition,
+  category: AircraftCategory,
+  config: PricingConfig
+): number {
+  if (service.startingPrice === null) return 0;
+  return service.startingPrice * config.sizeMultiplier[category] * config.categoryComplexityMultiplier[category];
 }
 
 /** Runs the full pricing pipeline and returns a price range, labor hours,

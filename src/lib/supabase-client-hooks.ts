@@ -33,10 +33,12 @@ export interface AdminClient {
 }
 
 /** An aircraft as seen by the admin Report Builder's picker — joined
- * with its owner's id/name so saving a report can derive client_id from
- * whichever aircraft is selected, without a second lookup. */
+ * with its owner's id/name/email so saving a report can derive client_id
+ * from whichever aircraft is selected, and emailing a confirmed report
+ * has the client's address on hand, both without a second lookup. */
 export interface AdminAircraft extends Aircraft {
   ownerName: string;
+  ownerEmail: string;
 }
 
 export interface AdminInvoice extends Invoice {
@@ -287,7 +289,7 @@ export function useAdminAircraft() {
   const fetcher = useCallback(async () => {
     const { data, error } = await supabase
       .from("aircraft")
-      .select("*, profiles(name)")
+      .select("*, profiles(name, email)")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -297,6 +299,7 @@ export function useAdminAircraft() {
     return camelizeKeys<any[]>(data ?? []).map((row: any) => ({
       ...row,
       ownerName: row.profiles?.name ?? "Unknown client",
+      ownerEmail: row.profiles?.email ?? "",
     })) as AdminAircraft[];
   }, []);
 
@@ -553,12 +556,24 @@ export async function getSignedPhotoUrl(path: string, expiresInSeconds = 3600) {
 /** Creates a detailing report plus its observed_issues rows in one call.
  * Returns the new report's id so the caller can immediately attach
  * photos to it (uploadReportPhoto below) and generate a PDF. */
+export interface ReportServicePrice {
+  code: string;
+  name: string;
+  /** The category-multiplier-adjusted starting price, before any
+   * manual adjustment — kept alongside finalPrice so the report (and
+   * its PDF) can show what was adjusted from, not just the end number. */
+  basePrice: number;
+  finalPrice: number;
+}
+
 export async function createDetailingReport(report: {
   aircraftId: string;
   clientId: string;
   serviceDate: string;
   location: string;
   servicesPerformed: string[];
+  servicePrices: ReportServicePrice[];
+  total: number;
   productsUsed: string[];
   technicianNotes: string | null;
   recommendations: string | null;
@@ -572,6 +587,8 @@ export async function createDetailingReport(report: {
       service_date: report.serviceDate,
       location: report.location,
       services_performed: report.servicesPerformed,
+      service_prices: report.servicePrices,
+      total: report.total,
       products_used: report.productsUsed,
       technician_notes: report.technicianNotes,
       recommendations: report.recommendations,
@@ -599,6 +616,19 @@ export async function createDetailingReport(report: {
   }
 
   return reportId;
+}
+
+/** Marks a report confirmed once it's been successfully emailed — kept
+ * as a separate call (not part of the email function itself) so a
+ * failed send never leaves a report marked confirmed. */
+export async function confirmDetailingReport(reportId: string) {
+  const { error } = await supabase
+    .from("detailing_reports")
+    .update({ confirmed_at: new Date().toISOString() })
+    .eq("id", reportId);
+  if (error) {
+    throw error;
+  }
 }
 
 /** Uploads to the (private) report-photos bucket under

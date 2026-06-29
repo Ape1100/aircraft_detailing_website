@@ -226,6 +226,19 @@ create table detailing_reports (
   service_date date not null,
   location text not null,
   services_performed text[],
+  -- Per-service price after the admin's manual up/down adjustment, plus
+  -- the unadjusted category-multiplier base price it started from (see
+  -- calculateServiceBasePrice in pricing-engine.ts) — an array of
+  -- {code, name, basePrice, finalPrice}, mirroring the jsonb line_items
+  -- pattern already used on custom_quotes.
+  service_prices jsonb not null default '[]'::jsonb,
+  total numeric(10, 2),
+  -- Set once the report has been emailed to the client (see
+  -- send-report-email.ts) — null means still a draft. Deliberately a
+  -- separate confirm step from the initial save, not implied by mere
+  -- existence of the row, so a half-finished report never gets emailed
+  -- by accident.
+  confirmed_at timestamptz,
   products_used text[],
   technician_notes text,
   recommendations text,
