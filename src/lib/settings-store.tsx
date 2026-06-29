@@ -42,7 +42,7 @@ export const DEFAULT_BUSINESS_SETTINGS: BusinessSettings = {
   companyName: "Brightwork",
   tagline: "Aircraft Appearance & Preservation Services",
   logoDataUrl: null,
-  contactEmail: "hello@brightworkaero.com",
+  contactEmail: "hello@brightworkdetiling.com",
   contactPhone: "(800) 467-2331",
   serviceArea: "Mobile service — CA Central Valley & Bay Area",
   accentColorHex: "#E8A33D",
