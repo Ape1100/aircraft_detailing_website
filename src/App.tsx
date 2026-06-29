@@ -1,5 +1,6 @@
 import { Route, Routes, useNavigate } from "react-router-dom";
 import {
+  CalendarDays,
   ClipboardList,
   FileSignature,
   FileText,
@@ -36,6 +37,7 @@ import Membership from "@/pages/client/Membership";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminClients from "@/pages/admin/AdminClients";
 import AdminRequests from "@/pages/admin/AdminRequests";
+import AdminCalendar from "@/pages/admin/AdminCalendar";
 import AdminReportBuilder from "@/pages/admin/AdminReportBuilder";
 import AdminServices from "@/pages/admin/AdminServices";
 import AdminInvoices from "@/pages/admin/AdminInvoices";
@@ -59,6 +61,7 @@ const ADMIN_NAV: PortalNavItem[] = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
   { to: "/admin/requests", label: "Requests", icon: ClipboardList },
+  { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/admin/custom-quote", label: "Custom Quote", icon: FileSignature },
   { to: "/admin/report-builder", label: "Report Builder", icon: FileText },
   { to: "/admin/services", label: "Services", icon: Wrench },
@@ -128,6 +131,7 @@ export default function App() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="clients" element={<AdminClients />} />
           <Route path="requests" element={<AdminRequests />} />
+          <Route path="calendar" element={<AdminCalendar />} />
           <Route path="custom-quote" element={<AdminCustomQuote />} />
           <Route path="report-builder" element={<AdminReportBuilder />} />
           <Route path="services" element={<AdminServices />} />

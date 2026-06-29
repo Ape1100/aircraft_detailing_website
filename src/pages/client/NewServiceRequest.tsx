@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-provider";
-import { createServiceRequest, useClientAircraft } from "@/lib/supabase-client-hooks";
+import { createServiceRequest, uploadRequestPhotos, useClientAircraft } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +23,7 @@ export default function NewServiceRequest() {
   const [airportLocation, setAirportLocation] = useState("");
   const [fboName, setFboName] = useState("");
   const [notes, setNotes] = useState("");
+  const [photos, setPhotos] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +78,7 @@ export default function NewServiceRequest() {
               setError(null);
               setSubmitting(true);
               try {
-                await createServiceRequest(
+                const requestId = await createServiceRequest(
                   session.user.id,
                   aircraftId,
                   selectedServices,
@@ -86,6 +87,9 @@ export default function NewServiceRequest() {
                   fboName || null,
                   notes || null
                 );
+                if (photos.length > 0) {
+                  await uploadRequestPhotos(session.user.id, requestId, photos);
+                }
                 setSubmitted(true);
               } catch (err) {
                 setError((err as Error).message || "Failed to submit request. Please try again.");
@@ -181,6 +185,20 @@ export default function NewServiceRequest() {
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="Anything we should know?"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="photos-input">Photos (optional)</Label>
+              <Input
+                id="photos-input"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => setPhotos(Array.from(event.target.files ?? []))}
+              />
+              {photos.length > 0 && (
+                <p className="mt-1 text-xs text-steel2">{photos.length} photo{photos.length > 1 ? "s" : ""} selected</p>
+              )}
             </div>
 
             <Button

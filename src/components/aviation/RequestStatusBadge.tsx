@@ -10,6 +10,7 @@ const CONFIG: Record<RequestStatus, { label: string; variant: "neutral" | "amber
   completed: { label: "Completed", variant: "green" },
   paid: { label: "Paid", variant: "green" },
   archived: { label: "Archived", variant: "neutral" },
+  cancelled: { label: "Cancelled", variant: "rust" },
 };
 
 export function RequestStatusBadge({ status }: { status: RequestStatus }) {

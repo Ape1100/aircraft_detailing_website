@@ -60,7 +60,8 @@ export type RequestStatus =
   | "in_progress"
   | "completed"
   | "paid"
-  | "archived";
+  | "archived"
+  | "cancelled";
 
 export type ObservedIssueCategory =
   | "paint_chips"
@@ -87,6 +88,15 @@ export interface Aircraft {
   notes?: string;
 }
 
+export interface RequestPhoto {
+  id: string;
+  requestId: string;
+  /** Storage path within the aircraft-photos bucket, not a public URL —
+   * the bucket is private, so this is resolved to a signed URL on demand. */
+  url: string;
+  caption?: string;
+}
+
 export interface ServiceRequest {
   id: string;
   aircraftId: string;
@@ -94,6 +104,9 @@ export interface ServiceRequest {
   services: ServiceCode[];
   status: RequestStatus;
   preferredDate?: string;
+  /** Set by an admin once the request moves to "scheduled" — distinct from
+   * preferredDate, which is just the client's original ask. */
+  scheduledDate?: string;
   airportLocation: string;
   fboName?: string;
   notes?: string;

@@ -3,13 +3,16 @@ import { Sparkles, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RequestStatusBadge } from "@/components/aviation/RequestStatusBadge";
-import { MOCK_ADMIN_CLIENTS, MOCK_AIRCRAFT, MOCK_REQUESTS } from "@/lib/mock-data";
+import { useAdminClients, useAdminRequests } from "@/lib/supabase-client-hooks";
 import { useSettings } from "@/lib/settings-store";
 import { formatDate } from "@/lib/utils";
 
 export default function AdminDashboard() {
   const { onboarding, dismissSetupTour } = useSettings();
-  const openRequests = MOCK_REQUESTS.filter((r) => !["completed", "paid", "archived"].includes(r.status));
+  const { data: clients } = useAdminClients();
+  const { data: requests } = useAdminRequests();
+  const aircraftOnFile = clients.reduce((sum, c) => sum + c.aircraftCount, 0);
+  const openRequests = requests.filter((r) => !["completed", "paid", "archived", "cancelled"].includes(r.status));
   const showTourBanner = !onboarding.setupCompleted && !onboarding.tourDismissed;
 
   return (
@@ -43,34 +46,37 @@ export default function AdminDashboard() {
 
       <div className="grid gap-5 sm:grid-cols-4">
         <Card>
-          <CardHeader><CardDescription>Clients</CardDescription><CardTitle className="text-3xl">{MOCK_ADMIN_CLIENTS.length}</CardTitle></CardHeader>
+          <CardHeader><CardDescription>Clients</CardDescription><CardTitle className="text-3xl">{clients.length}</CardTitle></CardHeader>
         </Card>
         <Card>
-          <CardHeader><CardDescription>Aircraft on file</CardDescription><CardTitle className="text-3xl">{MOCK_AIRCRAFT.length}</CardTitle></CardHeader>
+          <CardHeader><CardDescription>Aircraft on file</CardDescription><CardTitle className="text-3xl">{aircraftOnFile}</CardTitle></CardHeader>
         </Card>
         <Card>
           <CardHeader><CardDescription>Open requests</CardDescription><CardTitle className="text-3xl">{openRequests.length}</CardTitle></CardHeader>
         </Card>
         <Card>
-          <CardHeader><CardDescription>Quotes pending</CardDescription><CardTitle className="text-3xl">{MOCK_REQUESTS.filter((r) => r.status === "quote_sent").length}</CardTitle></CardHeader>
+          <CardHeader><CardDescription>Quotes pending</CardDescription><CardTitle className="text-3xl">{requests.filter((r) => r.status === "quote_sent").length}</CardTitle></CardHeader>
         </Card>
       </div>
 
       <Card>
         <CardHeader><CardTitle>Recent requests</CardTitle></CardHeader>
         <CardContent className="divide-y divide-ink/10 p-0">
-          {MOCK_REQUESTS.map((r) => {
-            const aircraft = MOCK_AIRCRAFT.find((a) => a.id === r.aircraftId);
-            return (
+          {requests.length === 0 ? (
+            <p className="px-6 py-4 text-sm text-steel">No service requests yet.</p>
+          ) : (
+            requests.slice(0, 8).map((r) => (
               <div key={r.id} className="flex items-center justify-between px-6 py-4">
                 <div>
-                  <p className="text-sm font-medium text-ink">{aircraft?.tailNumber} — {aircraft?.make} {aircraft?.model}</p>
+                  <p className="text-sm font-medium text-ink">
+                    {r.aircraft.tailNumber} — {r.aircraft.make} {r.aircraft.model}
+                  </p>
                   <p className="text-xs text-steel2">{formatDate(r.createdAt)}</p>
                 </div>
                 <RequestStatusBadge status={r.status} />
               </div>
-            );
-          })}
+            ))
+          )}
         </CardContent>
       </Card>
     </div>

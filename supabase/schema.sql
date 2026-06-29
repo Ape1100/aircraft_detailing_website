@@ -16,7 +16,7 @@ create type aircraft_category as enum (
 
 create type request_status as enum (
   'requested', 'quote_sent', 'approved', 'scheduled', 'in_progress',
-  'completed', 'paid', 'archived'
+  'completed', 'paid', 'archived', 'cancelled'
 );
 
 create type invoice_status as enum ('unpaid', 'deposit_paid', 'paid', 'overdue');
@@ -67,6 +67,12 @@ create table service_requests (
   client_id uuid not null references profiles (id) on delete cascade,
   status request_status not null default 'requested',
   preferred_date date,
+  -- Distinct from preferred_date: that's the client's original ask,
+  -- this is the date an admin actually locks in once approved — set
+  -- when status transitions to 'scheduled'. Drives the admin calendar
+  -- (src/pages/admin/AdminCalendar.tsx); requests with no scheduled_date
+  -- don't appear there.
+  scheduled_date date,
   airport_location text not null,
   fbo_name text,
   notes text,
@@ -79,6 +85,20 @@ create table service_items (
   id uuid primary key default gen_random_uuid(),
   request_id uuid not null references service_requests (id) on delete cascade,
   service_code text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Photos a client attaches when submitting a request (e.g. current
+-- condition), uploaded to the aircraft-photos storage bucket below under
+-- <client_user_id>/<request_id>/<filename>. `url` stores that storage
+-- path, not a public URL — the bucket is private, so callers resolve it
+-- to a signed URL on demand (see getSignedPhotoUrl in
+-- supabase-client-hooks.ts).
+create table request_photos (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references service_requests (id) on delete cascade,
+  url text not null,
+  caption text,
   created_at timestamptz not null default now()
 );
 
@@ -216,6 +236,7 @@ alter table profiles enable row level security;
 alter table aircraft enable row level security;
 alter table service_requests enable row level security;
 alter table service_items enable row level security;
+alter table request_photos enable row level security;
 alter table quotes enable row level security;
 alter table custom_quotes enable row level security;
 alter table invoices enable row level security;
@@ -281,6 +302,14 @@ create policy "Service items: via parent request" on service_items
     is_admin() or exists (
       select 1 from service_requests sr
       where sr.id = service_items.request_id and sr.client_id = auth.uid()
+    )
+  );
+
+create policy "Request photos: via parent request" on request_photos
+  for all using (
+    is_admin() or exists (
+      select 1 from service_requests sr
+      where sr.id = request_photos.request_id and sr.client_id = auth.uid()
     )
   );
 
