@@ -37,6 +37,7 @@ import Membership from "@/pages/client/Membership";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminClients from "@/pages/admin/AdminClients";
 import AdminRequests from "@/pages/admin/AdminRequests";
+import AdminChecklist from "@/pages/admin/AdminChecklist";
 import AdminCalendar from "@/pages/admin/AdminCalendar";
 import AdminReportBuilder from "@/pages/admin/AdminReportBuilder";
 import AdminServices from "@/pages/admin/AdminServices";
@@ -131,6 +132,7 @@ export default function App() {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="clients" element={<AdminClients />} />
           <Route path="requests" element={<AdminRequests />} />
+          <Route path="requests/:requestId/checklist" element={<AdminChecklist />} />
           <Route path="calendar" element={<AdminCalendar />} />
           <Route path="custom-quote" element={<AdminCustomQuote />} />
           <Route path="report-builder" element={<AdminReportBuilder />} />

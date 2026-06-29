@@ -102,6 +102,28 @@ create table request_photos (
   created_at timestamptz not null default now()
 );
 
+-- On-site, per-task checklist for a job — separate from the request's own
+-- `services` array, since a bundle like complete_detail is really several
+-- physical tasks (see BUNDLE_MAP in supabase-client-hooks.ts). Seeded once
+-- (check-then-insert) the first time a request's checklist is opened, not
+-- regenerated on every load. This is an internal field-ops tool, not
+-- client-facing — RLS below is intentionally admin-only, unlike every
+-- other table in this schema which is "owner or admin".
+create table request_checklist_items (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references service_requests (id) on delete cascade,
+  -- Bare ServiceCode for an atomic service (e.g. "exterior_wash"); for a
+  -- bundle's expanded sub-task, "<bundle_code>__<sub_code>" (e.g.
+  -- "complete_detail__exterior_wash") so it never collides with that same
+  -- service selected standalone on the same request.
+  item_code text not null,
+  label text not null,
+  completed boolean not null default false,
+  completed_at timestamptz,
+  completed_by uuid references profiles (id),
+  created_at timestamptz not null default now()
+);
+
 create table quotes (
   id uuid primary key default gen_random_uuid(),
   request_id uuid not null references service_requests (id) on delete cascade,
@@ -237,6 +259,7 @@ alter table aircraft enable row level security;
 alter table service_requests enable row level security;
 alter table service_items enable row level security;
 alter table request_photos enable row level security;
+alter table request_checklist_items enable row level security;
 alter table quotes enable row level security;
 alter table custom_quotes enable row level security;
 alter table invoices enable row level security;
@@ -312,6 +335,11 @@ create policy "Request photos: via parent request" on request_photos
       where sr.id = request_photos.request_id and sr.client_id = auth.uid()
     )
   );
+
+-- Admin-only, unlike the "owner or admin" pattern above — see the
+-- request_checklist_items table comment for why.
+create policy "Checklist items: admin only" on request_checklist_items
+  for all using (is_admin());
 
 create policy "Quotes: via parent request" on quotes
   for all using (

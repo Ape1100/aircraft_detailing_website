@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { ClipboardCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { RequestStatusBadge } from "@/components/aviation/RequestStatusBadge";
 import { RequestDetailDialog } from "@/components/admin/RequestDetailDialog";
@@ -24,13 +26,11 @@ export default function AdminRequests() {
             <p className="px-6 py-4 text-sm text-steel">No service requests yet.</p>
           ) : (
             requests.map((r) => (
-              <button
-                type="button"
+              <div
                 key={r.id}
-                onClick={() => setSelected(r)}
-                className="flex w-full flex-col gap-3 px-6 py-5 text-left transition-colors hover:bg-paperDim sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 px-6 py-5 transition-colors hover:bg-paperDim sm:flex-row sm:items-center sm:justify-between"
               >
-                <div>
+                <button type="button" onClick={() => setSelected(r)} className="flex-1 text-left">
                   <p className="font-medium text-ink">
                     {r.aircraft.tailNumber} — {r.aircraft.make} {r.aircraft.model}
                   </p>
@@ -40,9 +40,18 @@ export default function AdminRequests() {
                   <p className="text-xs text-steel2">
                     {r.clientName} · {r.airportLocation} · Submitted {formatDate(r.createdAt)}
                   </p>
+                </button>
+                <div className="flex items-center gap-3">
+                  <RequestStatusBadge status={r.status} />
+                  <Link
+                    to={`/admin/requests/${r.id}/checklist`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1.5 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:border-ink/30"
+                  >
+                    <ClipboardCheck className="h-3.5 w-3.5" /> Checklist
+                  </Link>
                 </div>
-                <RequestStatusBadge status={r.status} />
-              </button>
+              </div>
             ))
           )}
         </CardContent>

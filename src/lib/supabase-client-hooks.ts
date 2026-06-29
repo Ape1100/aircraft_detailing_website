@@ -9,6 +9,7 @@ import type {
   Invoice,
   Membership,
   RequestStatus,
+  ServiceDefinition,
   ServiceRequest,
 } from "@/types";
 
@@ -453,4 +454,134 @@ export async function getSignedPhotoUrl(path: string, expiresInSeconds = 3600) {
     throw error ?? new Error("Failed to sign photo URL");
   }
   return data.signedUrl;
+}
+
+/** Some catalog services are several distinct physical tasks bundled
+ * under one code (confirmed against DEFAULT_SERVICES' own description
+ * text, not guessed) — a checklist that shows the bundle as a single
+ * line doesn't actually prevent missing a sub-task within it. */
+export const CHECKLIST_BUNDLE_MAP: Record<string, string[]> = {
+  complete_detail: ["exterior_wash", "interior_refresh", "belly_cleaning"],
+  presale_cleanup: ["exterior_wash", "interior_refresh", "belly_cleaning", "window_polishing", "brightwork_polish"],
+};
+
+export interface ChecklistItem {
+  id: string;
+  requestId: string;
+  itemCode: string;
+  label: string;
+  completed: boolean;
+  completedAt: string | null;
+  completedBy: string | null;
+}
+
+/** A request's on-site checklist, seeded once (check-then-insert, never
+ * reseeded) the first time it's opened. `requestServices` and
+ * `serviceCatalog` are only read at seed time — pass them in once the
+ * parent request has actually loaded; this intentionally depends on just
+ * `requestId` so it doesn't refire if those arrays happen to get a new
+ * reference on a later render (see useSupabaseList's history in this
+ * file for why an unstable dependency here would be a real bug, not a
+ * style nit). */
+export function useRequestChecklist(
+  requestId: string | null,
+  requestServices: string[],
+  serviceCatalog: ServiceDefinition[]
+) {
+  const [items, setItems] = useState<ChecklistItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!requestId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const { data, error: selectError } = await supabase
+          .from("request_checklist_items")
+          .select("*")
+          .eq("request_id", requestId)
+          .order("created_at", { ascending: true });
+        if (selectError) throw selectError;
+
+        let rows = camelizeKeys<ChecklistItem[]>(data ?? []);
+
+        if (rows.length === 0 && requestServices.length > 0) {
+          const seedRows: { request_id: string; item_code: string; label: string }[] = [];
+          for (const code of requestServices) {
+            if (code === "membership_quote") continue;
+            const bundle = CHECKLIST_BUNDLE_MAP[code];
+            if (bundle) {
+              // Two different bundles can share a sub-task (e.g. both
+              // complete_detail and presale_cleanup include exterior_wash)
+              // — label with the parent bundle so two same-named rows on
+              // one request read as distinct tasks, not a duplicate.
+              const bundleLabel = serviceCatalog.find((s) => s.code === code)?.name ?? code;
+              for (const subCode of bundle) {
+                const subLabel = serviceCatalog.find((s) => s.code === subCode)?.name ?? subCode;
+                seedRows.push({
+                  request_id: requestId,
+                  item_code: `${code}__${subCode}`,
+                  label: `${subLabel} (${bundleLabel})`,
+                });
+              }
+            } else {
+              seedRows.push({
+                request_id: requestId,
+                item_code: code,
+                label: serviceCatalog.find((s) => s.code === code)?.name ?? code,
+              });
+            }
+          }
+
+          if (seedRows.length > 0) {
+            const { data: inserted, error: insertError } = await supabase
+              .from("request_checklist_items")
+              .insert(seedRows)
+              .select("*");
+            if (insertError) throw insertError;
+            rows = camelizeKeys<ChecklistItem[]>(inserted ?? []);
+          }
+        }
+
+        if (!cancelled) setItems(rows);
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message ?? String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId]);
+
+  return { items, setItems, loading, error };
+}
+
+/** Toggles one checklist item. Callers should update local state
+ * optimistically and revert on failure — this can't be a "save at the
+ * end" flow, since closing the tab mid-job shouldn't lose progress. */
+export async function toggleChecklistItem(itemId: string, completed: boolean, adminUserId: string) {
+  const { error } = await supabase
+    .from("request_checklist_items")
+    .update({
+      completed,
+      completed_at: completed ? new Date().toISOString() : null,
+      completed_by: completed ? adminUserId : null,
+    })
+    .eq("id", itemId);
+  if (error) {
+    throw error;
+  }
 }
