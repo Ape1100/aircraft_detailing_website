@@ -25,6 +25,7 @@ export interface AdminClient {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   company: string | null;
   aircraftCount: number;
 }
@@ -237,7 +238,7 @@ export function useAdminClients() {
   const fetcher = useCallback(async () => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id,name,email,company,aircraft(count)")
+      .select("id,name,email,phone,company,aircraft(count)")
       .eq("role", "client")
       .order("created_at", { ascending: false });
 
@@ -249,12 +250,68 @@ export function useAdminClients() {
       id: row.id,
       name: row.name,
       email: row.email,
+      phone: row.phone,
       company: row.company,
       aircraftCount: row.aircraft?.[0]?.count ?? 0,
     })) as AdminClient[];
   }, []);
 
   return useSupabaseList<AdminClient>(fetcher);
+}
+
+/** A specific client's aircraft + full service request history, for the
+ * admin client detail view. Lazy: only fetches once `clientId` is set
+ * (i.e. once a client row is actually clicked), rather than loading every
+ * client's data up front. */
+export function useAdminClientDetail(clientId: string | null) {
+  const [aircraft, setAircraft] = useState<Aircraft[]>([]);
+  const [requests, setRequests] = useState<AdminServiceRequest[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!clientId) {
+      setAircraft([]);
+      setRequests([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      supabase.from("aircraft").select("*").eq("owner_id", clientId).order("created_at", { ascending: false }),
+      supabase
+        .from("service_requests")
+        .select("*, aircraft(tail_number,make,model), service_items(service_code)")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false }),
+    ])
+      .then(([aircraftRes, requestsRes]) => {
+        if (aircraftRes.error) throw aircraftRes.error;
+        if (requestsRes.error) throw requestsRes.error;
+
+        setAircraft(camelizeKeys<Aircraft[]>(aircraftRes.data ?? []));
+        setRequests(
+          camelizeKeys<any[]>(requestsRes.data ?? []).map((row: any) => ({
+            ...row,
+            services:
+              row.services?.length > 0 ? row.services : row.serviceItems?.map((item: any) => item.serviceCode) ?? [],
+            aircraft: row.aircraft,
+            clientName: "",
+            photoCount: 0,
+          })) as AdminServiceRequest[]
+        );
+      })
+      .catch((err: unknown) => {
+        setError((err as { message?: string })?.message ?? String(err));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [clientId]);
+
+  return { aircraft, requests, loading, error };
 }
 
 /** Single mutation covering every admin-side request transition: editing
