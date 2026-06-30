@@ -93,4 +93,4 @@ export default async function handler(
   return new Response(html, { status: response.status, headers });
 }
 
-export const config = { path: "/*" };
+// Routing configured in netlify.toml [[edge_functions]] block.
