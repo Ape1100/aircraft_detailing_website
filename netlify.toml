@@ -2,7 +2,7 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
-  edge_functions = "netlify/edge-functions"
+  # edge-functions directory is auto-discovered at netlify/edge-functions/
 
 [dev]
   command = "npm run dev"

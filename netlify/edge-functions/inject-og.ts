@@ -1,30 +1,55 @@
 // Netlify Edge Function: inject-og
 // -----------------------------------------------------------------------
 // Runs at the CDN edge before any HTML reaches the requester. Replaces
-// the generic/fallback OG and Twitter meta tags baked into dist/index.html
-// with route-specific values from src/lib/page-meta.ts.
+// the generic/fallback OG and Twitter meta tags in dist/index.html with
+// route-specific values based on the request path.
 //
-// WHY: react-helmet-async sets per-page tags client-side after JS loads,
-// which Googlebot sees (it executes JS), but social link-preview bots
-// (iMessage, WhatsApp, Slack, Facebook, LinkedIn) fetch only the raw HTML
-// and never execute JS — they saw identical homepage tags for every URL.
-// This function fixes that without adding SSR or SSG to the project.
+// WHY: react-helmet-async sets per-page tags after JS loads (fine for
+// Googlebot, which executes JS), but social link-preview bots — iMessage,
+// WhatsApp, Slack, Facebook, LinkedIn — fetch raw HTML only and saw
+// identical homepage tags for every shared URL. This fixes that.
 //
-// HOW: intercepts HTML responses only (JS/CSS/API/assets pass straight
-// through). Reads the path, looks up the matching RouteMeta from the
-// same shared module the <Seo> component uses, and does a targeted
-// regex-replace of the existing static tags already in index.html.
+// SELF-CONTAINED: route metadata is inlined here rather than imported
+// from src/lib/page-meta.ts. Cross-directory imports can be unreliable
+// in Netlify's Deno edge bundler. Keep the copy here in sync with
+// src/lib/page-meta.ts if titles/descriptions change.
 // -----------------------------------------------------------------------
 
-import type { Context } from "@netlify/edge-functions";
-import {
-  buildFullTitle,
-  DEFAULT_OG_IMAGE,
-  ROUTE_META,
-  SITE_URL,
-} from "../../src/lib/page-meta.ts";
+import type { Context } from "https://edge.netlify.com";
 
-/** Escape characters that would break an HTML attribute value. */
+const SITE_NAME = "Brightwork";
+const SITE_URL = "https://brightworkdetailing.com";
+const OG_IMAGE =
+  "https://images.unsplash.com/photo-1734750358398-917f1da67c1f?auto=format&fit=crop&w=1200&q=80";
+
+const ROUTE_META: Record<string, { title: string; description: string }> = {
+  "/": {
+    title: "Aircraft Appearance & Preservation Services",
+    description:
+      "Mobile aircraft detailing, appearance preservation, and photo-documented service for owners, FBOs, charter operators, and flight schools. CA Central Valley & Bay Area.",
+  },
+  "/about": {
+    title: "About Brightwork",
+    description:
+      "Learn about Brightwork — mobile aircraft detailing and appearance preservation services for owners, FBOs, and operators. Mobile service — CA Central Valley & Bay Area.",
+  },
+  "/estimate": {
+    title: "Get an Instant Aircraft Detailing Estimate",
+    description:
+      "Tell us about your aircraft and we'll give you an instant price estimate for exterior wash, interior refresh, paint correction, ceramic coating, and more.",
+  },
+  "/login": {
+    title: "Sign In — Client & Admin Portal",
+    description:
+      "Sign in to the Brightwork client portal to track service requests, view invoices, and manage your aircraft profiles.",
+  },
+  "/signup": {
+    title: "Create a Client Account",
+    description:
+      "Create your Brightwork client account to track aircraft detailing service requests, view reports, and manage invoices online.",
+  },
+};
+
 function esc(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -34,16 +59,13 @@ function esc(str: string): string {
 }
 
 export default async function handler(req: Request, context: Context) {
-  // Pass non-HTML requests (JS bundles, CSS, images, API calls) straight
-  // through — no need to read or modify them.
+  // Pass non-HTML requests straight through.
   const accept = req.headers.get("accept") ?? "";
   if (!accept.includes("text/html")) {
     return context.next();
   }
 
   const response = await context.next();
-
-  // Only modify actual HTML responses.
   const ct = response.headers.get("content-type") ?? "";
   if (!ct.includes("text/html")) {
     return response;
@@ -51,54 +73,25 @@ export default async function handler(req: Request, context: Context) {
 
   const url = new URL(req.url);
   const path = url.pathname;
-
-  // Fall back to "/" meta for any path not explicitly listed — e.g.
-  // /portal, /admin — which we don't expect to be crawled anyway.
   const meta = ROUTE_META[path] ?? ROUTE_META["/"];
-  const fullTitle = esc(buildFullTitle(meta));
+  const fullTitle = esc(`${meta.title} | ${SITE_NAME}`);
   const description = esc(meta.description);
   const canonicalUrl = esc(`${SITE_URL}${path}`);
-  const image = esc(DEFAULT_OG_IMAGE);
+  const image = esc(OG_IMAGE);
 
   let html = await response.text();
 
-  // Replace the static fallback values already present in dist/index.html.
-  // Using targeted replacements rather than DOM manipulation keeps the
-  // function tiny and the Deno runtime dependency-free.
   html = html
     .replace(/<title>[^<]*<\/title>/, `<title>${fullTitle}</title>`)
-    .replace(
-      /(<meta name="description" content=")[^"]*(")/,
-      `$1${description}$2`
-    )
-    .replace(
-      /(<meta property="og:title" content=")[^"]*(")/,
-      `$1${fullTitle}$2`
-    )
-    .replace(
-      /(<meta property="og:description" content=")[^"]*(")/,
-      `$1${description}$2`
-    )
-    .replace(
-      /(<meta property="og:url" content=")[^"]*(")/,
-      `$1${canonicalUrl}$2`
-    )
-    .replace(
-      /(<meta property="og:image" content=")[^"]*(")/,
-      `$1${image}$2`
-    )
-    .replace(
-      /(<meta name="twitter:title" content=")[^"]*(")/,
-      `$1${fullTitle}$2`
-    )
-    .replace(
-      /(<meta name="twitter:description" content=")[^"]*(")/,
-      `$1${description}$2`
-    );
+    .replace(/(<meta name="description" content=")[^"]*(")/,  `$1${description}$2`)
+    .replace(/(<meta property="og:title" content=")[^"]*(")/,  `$1${fullTitle}$2`)
+    .replace(/(<meta property="og:description" content=")[^"]*(")/,  `$1${description}$2`)
+    .replace(/(<meta property="og:url" content=")[^"]*(")/,  `$1${canonicalUrl}$2`)
+    .replace(/(<meta property="og:image" content=")[^"]*(")/,  `$1${image}$2`)
+    .replace(/(<meta name="twitter:title" content=")[^"]*(")/,  `$1${fullTitle}$2`)
+    .replace(/(<meta name="twitter:description" content=")[^"]*(")/,  `$1${description}$2`);
 
-  // Preserve original headers (cache-control, etag, etc.) and status.
   const headers = new Headers(response.headers);
-  // Avoid caching stale tags at the CDN level for the injected HTML.
   headers.set("cache-control", "no-cache");
 
   return new Response(html, { status: response.status, headers });
