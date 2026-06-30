@@ -1,21 +1,6 @@
 // Netlify Edge Function: inject-og
-// -----------------------------------------------------------------------
-// Runs at the CDN edge before any HTML reaches the requester. Replaces
-// the generic/fallback OG and Twitter meta tags in dist/index.html with
-// route-specific values based on the request path.
-//
-// WHY: react-helmet-async sets per-page tags after JS loads (fine for
-// Googlebot, which executes JS), but social link-preview bots — iMessage,
-// WhatsApp, Slack, Facebook, LinkedIn — fetch raw HTML only and saw
-// identical homepage tags for every shared URL. This fixes that.
-//
-// SELF-CONTAINED: route metadata is inlined here rather than imported
-// from src/lib/page-meta.ts. Cross-directory imports can be unreliable
-// in Netlify's Deno edge bundler. Keep the copy here in sync with
-// src/lib/page-meta.ts if titles/descriptions change.
-// -----------------------------------------------------------------------
-
-import type { Context } from "https://edge.netlify.com";
+// Injects route-specific OG/Twitter meta tags before the response
+// reaches social preview bots that don't execute JavaScript.
 
 const SITE_NAME = "Brightwork";
 const SITE_URL = "https://brightworkdetailing.com";
@@ -58,20 +43,20 @@ function esc(str: string): string {
     .replace(/>/g, "&gt;");
 }
 
-export default async function handler(req: Request, context: Context) {
-  // Pass non-HTML requests straight through.
-  const accept = req.headers.get("accept") ?? "";
+export default async function handler(request: Request): Promise<Response> {
+  const accept = request.headers.get("accept") ?? "";
   if (!accept.includes("text/html")) {
-    return context.next();
+    // Let non-HTML requests pass through unmodified.
+    return fetch(request);
   }
 
-  const response = await context.next();
+  const response = await fetch(request);
   const ct = response.headers.get("content-type") ?? "";
   if (!ct.includes("text/html")) {
     return response;
   }
 
-  const url = new URL(req.url);
+  const url = new URL(request.url);
   const path = url.pathname;
   const meta = ROUTE_META[path] ?? ROUTE_META["/"];
   const fullTitle = esc(`${meta.title} | ${SITE_NAME}`);
@@ -83,12 +68,12 @@ export default async function handler(req: Request, context: Context) {
 
   html = html
     .replace(/<title>[^<]*<\/title>/, `<title>${fullTitle}</title>`)
-    .replace(/(<meta name="description" content=")[^"]*(")/,  `$1${description}$2`)
+    .replace(/(<meta name="description" content=")[^"]*(")/,   `$1${description}$2`)
     .replace(/(<meta property="og:title" content=")[^"]*(")/,  `$1${fullTitle}$2`)
     .replace(/(<meta property="og:description" content=")[^"]*(")/,  `$1${description}$2`)
-    .replace(/(<meta property="og:url" content=")[^"]*(")/,  `$1${canonicalUrl}$2`)
+    .replace(/(<meta property="og:url" content=")[^"]*(")/,    `$1${canonicalUrl}$2`)
     .replace(/(<meta property="og:image" content=")[^"]*(")/,  `$1${image}$2`)
-    .replace(/(<meta name="twitter:title" content=")[^"]*(")/,  `$1${fullTitle}$2`)
+    .replace(/(<meta name="twitter:title" content=")[^"]*(")/,       `$1${fullTitle}$2`)
     .replace(/(<meta name="twitter:description" content=")[^"]*(")/,  `$1${description}$2`);
 
   const headers = new Headers(response.headers);
@@ -96,3 +81,7 @@ export default async function handler(req: Request, context: Context) {
 
   return new Response(html, { status: response.status, headers });
 }
+
+// Route config — tells Netlify which paths this function handles.
+// Using the export approach avoids netlify.toml routing config entirely.
+export const config = { path: "/*" };

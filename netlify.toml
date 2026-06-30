@@ -10,8 +10,5 @@
   port = 8888
   autoLaunch = false
 
-# Run the OG-tag injection on every HTML request.
-# JS/CSS/image/API requests bypass it (the function checks Accept header).
-[[edge_functions]]
-  path = "/*"
-  function = "inject-og"
+# Edge function routing is configured via `export const config` in
+# netlify/edge-functions/inject-og.ts rather than here.
