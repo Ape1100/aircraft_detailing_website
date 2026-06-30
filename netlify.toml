@@ -2,14 +2,9 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
-  # edge-functions directory is auto-discovered at netlify/edge-functions/
 
 [dev]
   command = "npm run dev"
   targetPort = 5173
   port = 8888
   autoLaunch = false
-
-[[edge_functions]]
-  path = "/*"
-  function = "inject-og"
