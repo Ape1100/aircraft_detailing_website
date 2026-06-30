@@ -19,6 +19,7 @@
 import type { Handler } from "@netlify/functions";
 import Stripe from "stripe";
 import { createSupabaseAdminClient } from "./pricing-settings";
+import { createPostHogClient } from "./posthog-client";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2026-06-24.dahlia",
@@ -75,6 +76,16 @@ export const handler: Handler = async (event) => {
       customer: customerId,
       return_url: `${process.env.SITE_URL}/portal/membership`,
     });
+
+    const posthog = createPostHogClient();
+    posthog.capture({
+      distinctId: clientId,
+      event: "billing portal opened",
+      properties: {
+        stripe_subscription_id: membership.stripe_subscription_id,
+      },
+    });
+    await posthog.shutdown();
 
     return { statusCode: 200, body: JSON.stringify({ url: portalSession.url }) };
   } catch (err) {

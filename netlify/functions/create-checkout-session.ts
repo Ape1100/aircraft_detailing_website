@@ -45,6 +45,7 @@
 import type { Handler } from "@netlify/functions";
 import Stripe from "stripe";
 import { createSupabaseAdminClient } from "./pricing-settings";
+import { createPostHogClient } from "./posthog-client";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2026-06-24.dahlia",
@@ -145,6 +146,18 @@ async function handleInvoiceCheckout(invoiceId: string) {
       return { statusCode: 500, body: "Failed to create Stripe checkout session" };
     }
 
+    const posthog = createPostHogClient();
+    posthog.capture({
+      distinctId: invoice.client_id,
+      event: "invoice checkout started",
+      properties: {
+        invoice_id: invoiceId,
+        amount: remainingAmount,
+        deposit_amount: deposit,
+      },
+    });
+    await posthog.shutdown();
+
     return { statusCode: 200, body: JSON.stringify({ url: session.url }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: (err as Error).message }) };
@@ -212,6 +225,18 @@ async function handleCustomQuoteCheckout(customQuoteId: string) {
     if (!session.url) {
       return { statusCode: 500, body: "Failed to create Stripe checkout session" };
     }
+
+    const posthog = createPostHogClient();
+    posthog.capture({
+      distinctId: quote.client_id,
+      event: "custom quote checkout started",
+      properties: {
+        custom_quote_id: customQuoteId,
+        amount: total,
+        client_name: quote.client_name,
+      },
+    });
+    await posthog.shutdown();
 
     return { statusCode: 200, body: JSON.stringify({ url: session.url, amount: total }) };
   } catch (err) {

@@ -43,6 +43,7 @@ import type { Handler } from "@netlify/functions";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import { createSupabaseAdminClient } from "./pricing-settings";
+import { createPostHogClient } from "./posthog-client";
 
 /** Looks up the client's email from profiles, then sends a payment
  * receipt via Resend. Any error — missing key, missing email, Resend
@@ -71,6 +72,16 @@ async function sendPaymentReceipt(
       console.warn(`[receipt] No email found for client ${clientId} — skipping receipt.`);
       return;
     }
+
+    const posthog = createPostHogClient();
+    posthog.identify({
+      distinctId: clientId,
+      properties: {
+        email: profile.email,
+        name: profile.name ?? undefined,
+      },
+    });
+    await posthog.shutdown();
 
     const resend = new Resend(process.env.RESEND_API_KEY);
     const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -182,6 +193,20 @@ export const handler: Handler = async (event) => {
               const invoiceRef = `Invoice #${String(metadata.invoiceId).slice(0, 8).toUpperCase()}`;
               await sendPaymentReceipt(metadata.clientId, chargedAmount, invoiceRef);
             }
+
+            if (metadata.clientId) {
+              const posthog = createPostHogClient();
+              posthog.capture({
+                distinctId: metadata.clientId,
+                event: "invoice paid",
+                properties: {
+                  invoice_id: metadata.invoiceId,
+                  amount: chargedAmount,
+                  stripe_charge_id: chargeId,
+                },
+              });
+              await posthog.shutdown();
+            }
           }
         } else if (metadata.customQuoteId) {
           const { data: quote } = await supabase
@@ -201,6 +226,19 @@ export const handler: Handler = async (event) => {
             if (metadata.clientId) {
               await sendPaymentReceipt(metadata.clientId, chargedAmount, "Custom Quote");
             }
+
+            if (metadata.clientId) {
+              const posthog = createPostHogClient();
+              posthog.capture({
+                distinctId: metadata.clientId,
+                event: "custom quote paid",
+                properties: {
+                  custom_quote_id: metadata.customQuoteId,
+                  amount: chargedAmount,
+                },
+              });
+              await posthog.shutdown();
+            }
           }
         } else if (session.mode === "subscription" && metadata.tier && metadata.clientId) {
           const subscriptionId = asId(session.subscription);
@@ -219,6 +257,18 @@ export const handler: Handler = async (event) => {
               stripe_subscription_id: subscriptionId,
             });
             if (error && !isUniqueViolation(error)) throw error;
+
+            const posthog = createPostHogClient();
+            posthog.capture({
+              distinctId: metadata.clientId,
+              event: "membership activated",
+              properties: {
+                tier: metadata.tier,
+                monthly_amount: chargedAmount,
+                stripe_subscription_id: subscriptionId,
+              },
+            });
+            await posthog.shutdown();
           }
         }
         break;
@@ -231,22 +281,54 @@ export const handler: Handler = async (event) => {
         // not a top-level `invoice.subscription` field.
         const subscriptionId = asId(invoice.parent?.subscription_details?.subscription ?? undefined);
         if (subscriptionId) {
-          const { error } = await supabase
+          const { data: membershipRow, error } = await supabase
             .from("memberships")
             .update({ status: "active" })
-            .eq("stripe_subscription_id", subscriptionId);
+            .eq("stripe_subscription_id", subscriptionId)
+            .select("client_id, tier, monthly_amount")
+            .maybeSingle();
           if (error) throw error;
+
+          if (membershipRow?.client_id) {
+            const posthog = createPostHogClient();
+            posthog.capture({
+              distinctId: membershipRow.client_id,
+              event: "membership renewed",
+              properties: {
+                tier: membershipRow.tier,
+                monthly_amount: membershipRow.monthly_amount,
+                stripe_subscription_id: subscriptionId,
+              },
+            });
+            await posthog.shutdown();
+          }
         }
         break;
       }
 
       case "customer.subscription.deleted": {
         const subscription = stripeEvent.data.object as Stripe.Subscription;
-        const { error } = await supabase
+        const { data: cancelledMembership, error } = await supabase
           .from("memberships")
           .update({ status: "cancelled" })
-          .eq("stripe_subscription_id", subscription.id);
+          .eq("stripe_subscription_id", subscription.id)
+          .select("client_id, tier, monthly_amount")
+          .maybeSingle();
         if (error) throw error;
+
+        if (cancelledMembership?.client_id) {
+          const posthog = createPostHogClient();
+          posthog.capture({
+            distinctId: cancelledMembership.client_id,
+            event: "membership cancelled",
+            properties: {
+              tier: cancelledMembership.tier,
+              monthly_amount: cancelledMembership.monthly_amount,
+              stripe_subscription_id: subscription.id,
+            },
+          });
+          await posthog.shutdown();
+        }
         break;
       }
 
@@ -254,6 +336,9 @@ export const handler: Handler = async (event) => {
         break;
     }
   } catch (err) {
+    const posthog = createPostHogClient();
+    posthog.captureException(err as Error, "stripe_webhook");
+    await posthog.shutdown();
     return { statusCode: 500, body: JSON.stringify({ error: (err as Error).message }) };
   }
 

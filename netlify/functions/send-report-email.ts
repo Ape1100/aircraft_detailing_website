@@ -20,6 +20,7 @@
 
 import type { Handler } from "@netlify/functions";
 import { Resend } from "resend";
+import { createPostHogClient } from "./posthog-client";
 
 function badRequest(message: string) {
   return { statusCode: 400, body: JSON.stringify({ error: message }) };
@@ -81,6 +82,19 @@ export const handler: Handler = async (event) => {
     if (error) {
       return { statusCode: 502, body: JSON.stringify({ error: error.message }) };
     }
+
+    const posthog = createPostHogClient();
+    posthog.capture({
+      distinctId: to,
+      event: "detailing report emailed",
+      properties: {
+        recipient_email: to,
+        client_name: typeof clientName === "string" ? clientName : undefined,
+        total: typeof total === "number" ? total : undefined,
+        filename,
+      },
+    });
+    await posthog.shutdown();
 
     return { statusCode: 200, body: JSON.stringify({ sent: true }) };
   } catch (err) {

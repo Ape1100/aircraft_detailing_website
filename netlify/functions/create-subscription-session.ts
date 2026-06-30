@@ -50,6 +50,7 @@ import Stripe from "stripe";
 import { loadPricingSettings } from "./pricing-settings";
 import { calculateEstimate } from "../../src/lib/pricing-engine";
 import type { EstimateInput, MembershipTier, ServiceDefinition } from "../../src/types";
+import { createPostHogClient } from "./posthog-client";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2026-06-24.dahlia",
@@ -192,6 +193,18 @@ export const handler: Handler = async (event) => {
     if (!session.url) {
       return { statusCode: 500, body: "Failed to create Stripe subscription session" };
     }
+
+    const posthog = createPostHogClient();
+    posthog.capture({
+      distinctId: clientId as string,
+      event: "membership checkout started",
+      properties: {
+        tier,
+        monthly_amount: estimate.total,
+        pricing_source: source,
+      },
+    });
+    await posthog.shutdown();
 
     return { statusCode: 200, body: JSON.stringify({ url: session.url, amount: estimate.total }) };
   } catch (err) {
