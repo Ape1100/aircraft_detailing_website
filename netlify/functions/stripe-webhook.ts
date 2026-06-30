@@ -41,7 +41,63 @@
 
 import type { Handler } from "@netlify/functions";
 import Stripe from "stripe";
+import { Resend } from "resend";
 import { createSupabaseAdminClient } from "./pricing-settings";
+
+/** Looks up the client's email from profiles, then sends a payment
+ * receipt via Resend. Any error — missing key, missing email, Resend
+ * API failure — is logged but NOT thrown: the payment is already
+ * recorded in Supabase and the webhook must still return 200. A failed
+ * receipt email is lower-stakes than a failed payment record. */
+async function sendPaymentReceipt(
+  clientId: string,
+  amountDollars: number,
+  description: string
+): Promise<void> {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+    console.warn("[receipt] RESEND_API_KEY or RESEND_FROM_EMAIL not set — skipping receipt email.");
+    return;
+  }
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email, name")
+      .eq("id", clientId)
+      .maybeSingle();
+
+    if (!profile?.email) {
+      console.warn(`[receipt] No email found for client ${clientId} — skipping receipt.`);
+      return;
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const greeting = profile.name ? `Hi ${profile.name},` : "Hi,";
+    const fromName = process.env.RESEND_FROM_EMAIL.split("@")[1]?.split(".")[0] ?? "Brightwork";
+
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: profile.email,
+      subject: `Payment received — $${amountDollars.toFixed(2)}`,
+      html: `
+        <p>${greeting}</p>
+        <p>We've received your payment of <strong>$${amountDollars.toFixed(2)}</strong> for ${description} on ${dateStr}.</p>
+        <p>Thank you for your business.</p>
+        <p style="color:#888;font-size:12px;">— ${fromName.charAt(0).toUpperCase() + fromName.slice(1)}</p>
+      `,
+    });
+
+    if (error) {
+      console.error("[receipt] Resend returned an error:", error.message);
+    } else {
+      console.log(`[receipt] Sent payment receipt to ${profile.email} for ${description}.`);
+    }
+  } catch (err) {
+    console.error("[receipt] Unexpected error sending receipt:", (err as Error).message);
+  }
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2026-06-24.dahlia",
@@ -119,6 +175,13 @@ export const handler: Handler = async (event) => {
               stripe_charge_id: chargeId,
             });
             if (paymentError && !isUniqueViolation(paymentError)) throw paymentError;
+
+            // Receipt email — runs after Supabase writes succeed; errors
+            // are caught inside and must NOT propagate to the caller.
+            if (metadata.clientId) {
+              const invoiceRef = `Invoice #${String(metadata.invoiceId).slice(0, 8).toUpperCase()}`;
+              await sendPaymentReceipt(metadata.clientId, chargedAmount, invoiceRef);
+            }
           }
         } else if (metadata.customQuoteId) {
           const { data: quote } = await supabase
@@ -133,6 +196,11 @@ export const handler: Handler = async (event) => {
               .update({ paid_at: new Date().toISOString(), stripe_checkout_session_id: session.id })
               .eq("id", metadata.customQuoteId);
             if (error) throw error;
+
+            // Receipt email — runs after Supabase write succeeds.
+            if (metadata.clientId) {
+              await sendPaymentReceipt(metadata.clientId, chargedAmount, "Custom Quote");
+            }
           }
         } else if (session.mode === "subscription" && metadata.tier && metadata.clientId) {
           const subscriptionId = asId(session.subscription);
