@@ -83,7 +83,7 @@ export const DEFAULT_SERVICES: ServiceDefinition[] = [
     name: "Pre-Sale Appearance Cleanup",
     description: "Full appearance pass to prepare an aircraft for listing photos and showing.",
     category: "launch",
-    startingPrice: 999,
+    startingPrice: 1595,
     availability: "available",
     unit: "flat",
   },
