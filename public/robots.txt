@@ -1,0 +1,16 @@
+User-agent: *
+
+# Public marketing pages — allow full crawl
+Allow: /
+Allow: /about
+Allow: /estimate
+Allow: /login
+Allow: /signup
+
+# Authenticated app areas — not intended for search results
+Disallow: /admin
+Disallow: /admin/
+Disallow: /portal
+Disallow: /portal/
+
+Sitemap: https://brightworkdetailing.com/sitemap.xml

@@ -1,3 +1,4 @@
+import { Seo } from "@/components/Seo";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Mail, MapPin, Phone } from "lucide-react";
 import { BrandBackdrop } from "@/components/layout/BrandBackdrop";
@@ -27,6 +28,11 @@ export default function AboutUs() {
 
   return (
     <div className="min-h-screen bg-paper">
+      <Seo
+        title={`About ${businessSettings.companyName}`}
+        description={`Learn about ${businessSettings.companyName} — mobile aircraft detailing and appearance preservation services for owners, FBOs, and operators. ${businessSettings.serviceArea}.`}
+        path="/about"
+      />
       <BrandBackdrop background={businessSettings.background} className="bg-ink">
         <header className="px-6 py-5">
           <div className="mx-auto flex max-w-6xl items-center justify-between">

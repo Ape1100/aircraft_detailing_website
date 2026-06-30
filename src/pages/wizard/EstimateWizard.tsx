@@ -1,3 +1,4 @@
+import { Seo } from "@/components/Seo";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Camera, Check, Plane, Save, ShieldAlert, UserPlus } from "lucide-react";
@@ -75,6 +76,11 @@ export default function EstimateWizard() {
 
   return (
     <div className="min-h-screen bg-paper">
+      <Seo
+        title="Get an Instant Aircraft Detailing Estimate"
+        description="Tell us about your aircraft and we'll give you an instant price estimate for exterior wash, interior refresh, paint correction, ceramic coating, and more."
+        path="/estimate"
+      />
       <header className="border-b border-ink/10 bg-white px-6 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
           <Link to="/">

@@ -1,3 +1,4 @@
+import { Seo } from "@/components/Seo";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { Hero } from "@/pages/landing/Hero";
@@ -11,6 +12,11 @@ import { FAQ } from "@/pages/landing/FAQ";
 export default function LandingPage() {
   return (
     <div>
+      <Seo
+        title="Aircraft Appearance & Preservation Services"
+        description="Mobile aircraft detailing, appearance preservation, and photo-documented service for owners, FBOs, charter operators, and flight schools. CA Central Valley & Bay Area."
+        path="/"
+      />
       <SiteHeader />
       <Hero />
       <TrustBar />
