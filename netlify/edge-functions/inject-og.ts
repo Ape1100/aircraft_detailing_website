@@ -43,14 +43,25 @@ function esc(str: string): string {
     .replace(/>/g, "&gt;");
 }
 
-export default async function handler(request: Request): Promise<Response> {
+// Inline the Context interface rather than importing it — avoids the
+// import URL/package compatibility issues that caused the previous two
+// deployment failures. The only method we need is next().
+interface EdgeContext {
+  next: (options?: { sendConditionalRequest?: boolean }) => Promise<Response>;
+}
+
+export default async function handler(
+  request: Request,
+  context: EdgeContext
+): Promise<Response> {
+  // Pass non-HTML requests (JS, CSS, images, API) straight through.
   const accept = request.headers.get("accept") ?? "";
   if (!accept.includes("text/html")) {
-    // Let non-HTML requests pass through unmodified.
-    return fetch(request);
+    return context.next();
   }
 
-  const response = await fetch(request);
+  const response = await context.next();
+
   const ct = response.headers.get("content-type") ?? "";
   if (!ct.includes("text/html")) {
     return response;
@@ -68,12 +79,12 @@ export default async function handler(request: Request): Promise<Response> {
 
   html = html
     .replace(/<title>[^<]*<\/title>/, `<title>${fullTitle}</title>`)
-    .replace(/(<meta name="description" content=")[^"]*(")/,   `$1${description}$2`)
-    .replace(/(<meta property="og:title" content=")[^"]*(")/,  `$1${fullTitle}$2`)
-    .replace(/(<meta property="og:description" content=")[^"]*(")/,  `$1${description}$2`)
-    .replace(/(<meta property="og:url" content=")[^"]*(")/,    `$1${canonicalUrl}$2`)
-    .replace(/(<meta property="og:image" content=")[^"]*(")/,  `$1${image}$2`)
-    .replace(/(<meta name="twitter:title" content=")[^"]*(")/,       `$1${fullTitle}$2`)
+    .replace(/(<meta name="description" content=")[^"]*(")/,          `$1${description}$2`)
+    .replace(/(<meta property="og:title" content=")[^"]*(")/,         `$1${fullTitle}$2`)
+    .replace(/(<meta property="og:description" content=")[^"]*(")/,   `$1${description}$2`)
+    .replace(/(<meta property="og:url" content=")[^"]*(")/,           `$1${canonicalUrl}$2`)
+    .replace(/(<meta property="og:image" content=")[^"]*(")/,         `$1${image}$2`)
+    .replace(/(<meta name="twitter:title" content=")[^"]*(")/,        `$1${fullTitle}$2`)
     .replace(/(<meta name="twitter:description" content=")[^"]*(")/,  `$1${description}$2`);
 
   const headers = new Headers(response.headers);
@@ -82,6 +93,4 @@ export default async function handler(request: Request): Promise<Response> {
   return new Response(html, { status: response.status, headers });
 }
 
-// Route config — tells Netlify which paths this function handles.
-// Using the export approach avoids netlify.toml routing config entirely.
 export const config = { path: "/*" };
