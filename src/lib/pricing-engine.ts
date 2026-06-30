@@ -247,14 +247,14 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
 export const DEFAULT_DISCOUNT_RULES: DiscountRule[] = [
   {
     id: "disc-holiday-seed",
-    label: "Holiday Special",
+    label: "4th of July Special",
     scope: "holiday",
     valueType: "percentage",
-    value: 10,
-    active: false,
-    startDate: "2026-12-01",
-    endDate: "2026-12-31",
-    notes: "Example seasonal promotion — edit dates and re-activate.",
+    value: 15,
+    active: true,
+    startDate: "2026-07-04",
+    endDate: "2026-07-06",
+    notes: "15% off all services — book by July 6, 2026.",
   },
   {
     id: "disc-repeat-seed",

@@ -2,6 +2,7 @@ import { Seo } from "@/components/Seo";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { Hero } from "@/pages/landing/Hero";
+import { PromoBanner } from "@/pages/landing/PromoBanner";
 import { TrustBar } from "@/pages/landing/TrustBar";
 import { Services } from "@/pages/landing/Services";
 import { Pricing } from "@/pages/landing/Pricing";
@@ -13,6 +14,7 @@ export default function LandingPage() {
   return (
     <div>
       <Seo path="/" />
+      <PromoBanner />
       <SiteHeader />
       <Hero />
       <TrustBar />
