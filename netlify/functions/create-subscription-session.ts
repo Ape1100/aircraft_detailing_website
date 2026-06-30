@@ -48,8 +48,13 @@
 import type { Handler } from "@netlify/functions";
 import Stripe from "stripe";
 import { loadPricingSettings } from "./pricing-settings";
+import {
+  MEMBERSHIP_BASELINE_BUNDLES,
+  MEMBERSHIP_BASELINE_AIRCRAFT,
+  buildCadenceAdjustedServices,
+} from "../../src/lib/membership-tiers";
 import { calculateEstimate } from "../../src/lib/pricing-engine";
-import type { EstimateInput, MembershipTier, ServiceDefinition } from "../../src/types";
+import type { MembershipTier } from "../../src/types";
 import { createPostHogClient } from "./posthog-client";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
@@ -63,54 +68,10 @@ const MEMBERSHIP_DISPLAY_NAME: Record<MembershipTier, string> = {
   fleet_fbo: "Fleet / FBO",
 };
 
-interface BundleEntry {
-  code: string;
-  /** Fraction of the service's full catalog price billed per month — 1
-   * for a monthly service, 1/3 for a quarterly one, etc. */
-  monthlyFraction: number;
-}
-
-/** Confirmed per-tier contents — see the file-level comment for the
- * "minimal escalation" rationale. fleet_fbo intentionally has no
- * bundle: it's sold as a custom quote, not a fixed self-serve price. */
-const MEMBERSHIP_BASELINE_BUNDLES: Partial<Record<MembershipTier, BundleEntry[]>> = {
-  ramp_ready: [{ code: "exterior_wash", monthlyFraction: 1 }],
-  owner_care: [
-    { code: "exterior_wash", monthlyFraction: 1 },
-    { code: "bug_exhaust_removal", monthlyFraction: 1 },
-    { code: "interior_refresh", monthlyFraction: 1 / 3 },
-  ],
-  preservation: [
-    { code: "exterior_wash", monthlyFraction: 1 },
-    { code: "bug_exhaust_removal", monthlyFraction: 1 },
-    { code: "interior_refresh", monthlyFraction: 1 },
-    { code: "brightwork_polish", monthlyFraction: 1 },
-  ],
-};
-
-const BASELINE_AIRCRAFT: Omit<EstimateInput, "services"> = {
-  category: "piston_single",
-  make: "",
-  model: "",
-  condition: ["good"],
-  airport: "",
-  rampParked: false,
-  travelDistanceMiles: 0,
-  photoCount: 0,
-};
-
-/** Returns the full service catalog with bundle members' prices scaled
- * by their monthlyFraction, so calculateEstimate()'s size/category/
- * condition/membership-discount math applies on top of the
- * cadence-adjusted base price instead of the full one-time price. */
-function buildCadenceAdjustedServices(catalog: ServiceDefinition[], bundle: BundleEntry[]): ServiceDefinition[] {
-  const fractionByCode = new Map(bundle.map((b) => [b.code, b.monthlyFraction]));
-  return catalog.map((s) => {
-    const fraction = fractionByCode.get(s.code);
-    if (fraction === undefined || s.startingPrice === null) return s;
-    return { ...s, startingPrice: s.startingPrice * fraction };
-  });
-}
+// Bundle definitions, baseline aircraft, and cadence-adjustment logic
+// are now in src/lib/membership-tiers.ts — shared with Memberships.tsx
+// so the landing page display and the Stripe charge always compute from
+// the same source and can never diverge.
 
 function badRequest(message: string) {
   return { statusCode: 400, body: JSON.stringify({ error: message }) };
@@ -158,7 +119,7 @@ export const handler: Handler = async (event) => {
     const cadenceAdjustedServices = buildCadenceAdjustedServices(services, bundle);
 
     const estimate = calculateEstimate(
-      { ...BASELINE_AIRCRAFT, services: bundle.map((b) => b.code) },
+      { ...MEMBERSHIP_BASELINE_AIRCRAFT, services: bundle.map((b) => b.code) },
       cadenceAdjustedServices,
       pricingConfig,
       { membershipTier: tier as MembershipTier }

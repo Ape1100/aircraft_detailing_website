@@ -3,40 +3,56 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useSettings } from "@/lib/settings-store";
+import { computeMembershipMonthlyPrice } from "@/lib/membership-tiers";
+import { formatCurrency } from "@/lib/utils";
 
-const PLANS = [
+// Tier metadata that doesn't change with pricing.
+const TIER_METADATA = [
   {
+    tier: "ramp_ready" as const,
     name: "Ramp Ready",
-    price: "$269",
-    cadence: "/month",
     description: "Recurring exterior care to keep an actively flown aircraft presentable.",
     features: ["Monthly exterior wash", "Service history log"],
   },
   {
+    tier: "owner_care" as const,
     name: "Owner Care",
-    price: "$438",
-    cadence: "/month",
     description: "Our most popular plan for owners who want consistent appearance upkeep.",
-    features: ["Everything in Ramp Ready", "Monthly bug & exhaust residue removal", "Quarterly interior refresh", "Priority scheduling"],
+    features: [
+      "Everything in Ramp Ready",
+      "Monthly bug & exhaust residue removal",
+      "Quarterly interior refresh",
+      "Priority scheduling",
+    ],
     featured: true,
   },
   {
+    tier: "preservation" as const,
     name: "Preservation",
-    price: "$834",
-    cadence: "/month",
     description: "Comprehensive appearance preservation for higher-use or higher-value aircraft.",
-    features: ["Everything in Owner Care, with interior refresh upgraded to monthly", "Monthly brightwork polishing", "Detailed photo documentation", "Pre-trip readiness checks"],
+    features: [
+      "Everything in Owner Care, with interior refresh upgraded to monthly",
+      "Monthly brightwork polishing",
+      "Detailed photo documentation",
+      "Pre-trip readiness checks",
+    ],
   },
   {
+    tier: "fleet_fbo" as const,
     name: "Fleet / FBO",
-    price: "Custom",
-    cadence: "quote",
     description: "Recurring preservation across a managed fleet or FBO ramp.",
-    features: ["Multi-aircraft scheduling", "Consolidated invoicing", "Dedicated account contact"],
+    features: [
+      "Multi-aircraft scheduling",
+      "Consolidated invoicing",
+      "Dedicated account contact",
+    ],
   },
 ];
 
 export function Memberships() {
+  const { services, pricingConfig } = useSettings();
+
   return (
     <section id="membership" className="bg-paper px-6 py-24">
       <div className="mx-auto max-w-6xl">
@@ -52,37 +68,49 @@ export function Memberships() {
         </div>
 
         <div className="mt-10 grid gap-5 lg:grid-cols-4">
-          {PLANS.map((plan) => (
-            <Card
-              key={plan.name}
-              className={plan.featured ? "border-amber/60 ring-1 ring-amber/30" : undefined}
-            >
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>{plan.name}</CardTitle>
-                  {plan.featured && <Badge variant="amber">Most popular</Badge>}
-                </div>
-                <p className="text-sm text-steel">{plan.description}</p>
-              </CardHeader>
-              <CardContent>
-                <p className="font-display text-3xl font-semibold text-ink">
-                  {plan.price}
-                  <span className="text-sm font-normal text-steel2"> {plan.cadence}</span>
-                </p>
-                <ul className="mt-5 space-y-2.5">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-steel">
-                      <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-navgreen" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Button asChild className="mt-6 w-full" variant={plan.featured ? "amber" : "outline"}>
-                  <Link to="/signup">{plan.price === "Custom" ? "Request a Quote" : "Choose Plan"}</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+          {TIER_METADATA.map((plan) => {
+            const monthly = computeMembershipMonthlyPrice(plan.tier, services, pricingConfig);
+            const priceDisplay = monthly != null ? formatCurrency(monthly) : "Custom";
+            const isCustom = monthly == null;
+
+            return (
+              <Card
+                key={plan.name}
+                className={plan.featured ? "border-amber/60 ring-1 ring-amber/30" : undefined}
+              >
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>{plan.name}</CardTitle>
+                    {plan.featured && <Badge variant="amber">Most popular</Badge>}
+                  </div>
+                  <p className="text-sm text-steel">{plan.description}</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="font-display text-3xl font-semibold text-ink">
+                    {priceDisplay}
+                    <span className="text-sm font-normal text-steel2">
+                      {isCustom ? " quote" : "/month"}
+                    </span>
+                  </p>
+                  <ul className="mt-5 space-y-2.5">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-sm text-steel">
+                        <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-navgreen" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    asChild
+                    className="mt-6 w-full"
+                    variant={plan.featured ? "amber" : "outline"}
+                  >
+                    <Link to="/signup">{isCustom ? "Request a Quote" : "Choose Plan"}</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </section>
