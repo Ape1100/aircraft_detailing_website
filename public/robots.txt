@@ -4,10 +4,10 @@ User-agent: *
 Allow: /
 Allow: /about
 Allow: /estimate
-Allow: /login
-Allow: /signup
 
-# Authenticated app areas — not intended for search results
+# Auth pages and authenticated app areas — not content for search results
+Disallow: /login
+Disallow: /signup
 Disallow: /admin
 Disallow: /admin/
 Disallow: /portal

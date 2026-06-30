@@ -19,11 +19,7 @@ export default function Signup() {
 
   return (
     <BrandBackdrop background={businessSettings.background} className="flex min-h-screen items-center justify-center px-6 py-16">
-      <Seo
-        title="Create a Client Account"
-        description="Create your Brightwork client account to track aircraft detailing service requests, view reports, and manage invoices online."
-        path="/signup"
-      />
+      <Seo path="/signup" />
       <Card className="w-full max-w-md">
         <CardHeader>
           <Link to="/">

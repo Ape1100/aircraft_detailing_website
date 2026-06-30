@@ -20,11 +20,7 @@ export default function Login() {
 
   return (
     <BrandBackdrop background={businessSettings.background} className="flex min-h-screen items-center justify-center px-6 py-16">
-      <Seo
-        title="Sign In — Client & Admin Portal"
-        description="Sign in to the Brightwork client portal to track service requests, view invoices, and manage your aircraft profiles."
-        path="/login"
-      />
+      <Seo path="/login" />
       <Card className="w-full max-w-md">
         <CardHeader>
           <Link to="/">

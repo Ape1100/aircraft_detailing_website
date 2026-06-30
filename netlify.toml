@@ -2,9 +2,16 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
+  edge_functions = "netlify/edge-functions"
 
 [dev]
   command = "npm run dev"
   targetPort = 5173
   port = 8888
   autoLaunch = false
+
+# Run the OG-tag injection on every HTML request.
+# JS/CSS/image/API requests bypass it (the function checks Accept header).
+[[edge_functions]]
+  path = "/*"
+  function = "inject-og"
