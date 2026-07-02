@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { getSampleBackgroundUrl } from "@/lib/sample-backgrounds";
+import { getResponsiveSampleBackgroundUrls } from "@/lib/sample-backgrounds";
 import type { BackgroundSettings } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -21,31 +21,62 @@ export function BrandBackdrop({
   imageClassName,
   imagePosition = "center center",
 }: BrandBackdropProps) {
-  const sampleUrl = background.mode === "sample" ? getSampleBackgroundUrl(background.sampleId) : null;
-  const imageUrl = background.mode === "custom" ? background.customDataUrl : sampleUrl;
+  const responsiveUrls = background.mode === "sample" ? getResponsiveSampleBackgroundUrls(background.sampleId) : null;
+  const customUrl = background.mode === "custom" ? background.customDataUrl : null;
+  const hasImage = Boolean(responsiveUrls || customUrl);
 
   return (
     <div
       className={cn("relative overflow-hidden", className)}
       style={background.mode === "solid" ? { backgroundColor: background.solidColorHex } : undefined}
     >
-      {imageUrl && (
+      {hasImage && (
         <>
-          <div
-            className={cn(
-              "pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat",
-              imageClassName
-            )}
-            style={{
-              backgroundImage: `url(${imageUrl})`,
-              backgroundPosition: imagePosition,
-            }}
-            role="presentation"
-          />
+          {responsiveUrls ? (
+            <>
+              {/* Mobile gets a smaller download of the same photo instead of
+               * the full desktop-width image — browsers don't fetch
+               * background-image on elements that never render. */}
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat md:hidden",
+                  imageClassName
+                )}
+                style={{
+                  backgroundImage: `url(${responsiveUrls.mobile})`,
+                  backgroundPosition: imagePosition,
+                }}
+                role="presentation"
+              />
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-0 hidden bg-cover bg-center bg-no-repeat md:block",
+                  imageClassName
+                )}
+                style={{
+                  backgroundImage: `url(${responsiveUrls.desktop})`,
+                  backgroundPosition: imagePosition,
+                }}
+                role="presentation"
+              />
+            </>
+          ) : (
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat",
+                imageClassName
+              )}
+              style={{
+                backgroundImage: `url(${customUrl})`,
+                backgroundPosition: imagePosition,
+              }}
+              role="presentation"
+            />
+          )}
           <div className={cn("pointer-events-none absolute inset-0 bg-ink/70", overlayClassName)} />
         </>
       )}
-      {!imageUrl && background.mode === "solid" && (
+      {!hasImage && background.mode === "solid" && (
         <div className={cn("pointer-events-none absolute inset-0 bg-ink/20", overlayClassName)} />
       )}
       <div className="relative">{children}</div>

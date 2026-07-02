@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { Hero } from "@/pages/landing/Hero";
 import { PromoBanner } from "@/pages/landing/PromoBanner";
 import { TrustBar } from "@/pages/landing/TrustBar";
+import { ResourceHub } from "@/pages/landing/ResourceHub";
 import { Services } from "@/pages/landing/Services";
 import { Pricing } from "@/pages/landing/Pricing";
 import { Memberships } from "@/pages/landing/Memberships";
@@ -18,6 +19,7 @@ export default function LandingPage() {
       <SiteHeader />
       <Hero />
       <TrustBar />
+      <ResourceHub />
       <Services />
       <Pricing />
       <Memberships />

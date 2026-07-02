@@ -13,6 +13,8 @@ import type {
   MembershipTier,
   OnboardingState,
   PricingConfig,
+  ResourceHubSettings,
+  ResourceLink,
   ServiceDefinition,
 } from "@/types";
 import { DEFAULT_DISCOUNT_RULES, DEFAULT_PRICING_CONFIG, DEFAULT_SERVICES } from "@/lib/pricing-engine";
@@ -31,6 +33,94 @@ export const DEFAULT_BACKGROUND: BackgroundSettings = {
 export const DEFAULT_GALLERY: GallerySettings = {
   enabled: false,
   photos: [],
+};
+
+export const DEFAULT_RESOURCE_HUB: ResourceHubSettings = {
+  enabled: true,
+  links: [
+    {
+      id: "res-poa",
+      title: "Pilots of America",
+      url: "https://www.pilotsofamerica.com/community/",
+      description: "General GA pilot and owner discussion forum.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-beechtalk",
+      title: "BeechTalk",
+      url: "https://www.beechtalk.com/forums/index.php",
+      description: "Beechcraft owner and pilot forum.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-copa",
+      title: "Cirrus Owners and Pilots Association (COPA)",
+      url: "https://forum.cirruspilots.org/",
+      description: "Cirrus owner community and forum.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-abs",
+      title: "American Bonanza Society",
+      url: "https://www.bonanza.org/",
+      description: "Type club for Beechcraft Bonanza, Baron, and Travel Air owners.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-aopa",
+      title: "AOPA — Aircraft Owners and Pilots Association",
+      url: "https://www.aopa.org/",
+      description: "The umbrella general aviation owner and pilot association.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-aopa-type-clubs",
+      title: "AOPA Aircraft Type Clubs Directory",
+      url: "https://www.aopa.org/go-fly/aircraft-and-ownership/aircraft-type-clubs",
+      description: "Directory of type clubs for most general aviation makes and models.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-eaa-type-clubs",
+      title: "EAA Type Club Coalition",
+      url: "https://www.eaa.org/eaa/aviation-interests/type-club-coalition/type-club-coalition-members",
+      description: "Experimental Aircraft Association's directory of affiliated type clubs.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-r-flying",
+      title: "r/flying (Reddit)",
+      url: "https://www.reddit.com/r/flying/",
+      description: "General pilot and owner discussion community on Reddit.",
+      category: "forum",
+      active: true,
+    },
+    {
+      id: "res-sportys",
+      title: "Sporty's Pilot Shop",
+      url: "https://www.sportys.com/",
+      description: "Pilot supplies, headsets, and aircraft care products.",
+      category: "affiliate",
+      isLiveAffiliateLink: false,
+      active: true,
+    },
+    {
+      id: "res-amazon",
+      title: "Amazon — Aircraft Cleaning & Detailing Supplies",
+      url: "https://www.amazon.com/",
+      description: "Cleaning and detailing products we recommend for aircraft owners.",
+      category: "affiliate",
+      isLiveAffiliateLink: false,
+      active: true,
+    },
+  ],
 };
 
 export const DEFAULT_ONBOARDING: OnboardingState = {
@@ -68,6 +158,7 @@ interface SettingsState {
   discountRules: DiscountRule[];
   customQuotes: CustomQuote[];
   gallery: GallerySettings;
+  resourceHub: ResourceHubSettings;
   onboarding: OnboardingState;
 }
 
@@ -112,6 +203,11 @@ function loadInitialState(): SettingsState {
           discountRules: parsed.discountRules ?? DEFAULT_DISCOUNT_RULES,
           customQuotes: parsed.customQuotes ?? [],
           gallery: { ...DEFAULT_GALLERY, ...parsed.gallery, photos: parsed.gallery?.photos ?? [] },
+          resourceHub: {
+            ...DEFAULT_RESOURCE_HUB,
+            ...parsed.resourceHub,
+            links: parsed.resourceHub?.links ?? DEFAULT_RESOURCE_HUB.links,
+          },
           onboarding: { ...DEFAULT_ONBOARDING, ...parsed.onboarding },
         };
       }
@@ -126,6 +222,7 @@ function loadInitialState(): SettingsState {
     discountRules: DEFAULT_DISCOUNT_RULES,
     customQuotes: [],
     gallery: DEFAULT_GALLERY,
+    resourceHub: DEFAULT_RESOURCE_HUB,
     onboarding: DEFAULT_ONBOARDING,
   };
 }
@@ -172,6 +269,11 @@ interface SettingsContextValue extends SettingsState {
   addGalleryPhoto: (photo: Omit<GalleryPhotoPair, "id">) => void;
   updateGalleryPhoto: (id: string, patch: Partial<GalleryPhotoPair>) => void;
   removeGalleryPhoto: (id: string) => void;
+
+  setResourceHubEnabled: (enabled: boolean) => void;
+  addResourceLink: (link: Omit<ResourceLink, "id">) => void;
+  updateResourceLink: (id: string, patch: Partial<ResourceLink>) => void;
+  removeResourceLink: (id: string) => void;
 
   completeSetup: () => void;
   dismissSetupTour: () => void;
@@ -371,6 +473,33 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           gallery: { ...s.gallery, photos: s.gallery.photos.filter((p) => p.id !== id) },
         })),
 
+      setResourceHubEnabled: (enabled) =>
+        setState((s) => ({ ...s, resourceHub: { ...s.resourceHub, enabled } })),
+
+      addResourceLink: (link) =>
+        setState((s) => ({
+          ...s,
+          resourceHub: {
+            ...s.resourceHub,
+            links: [...s.resourceHub.links, { ...link, id: crypto.randomUUID() }],
+          },
+        })),
+
+      updateResourceLink: (id, patch) =>
+        setState((s) => ({
+          ...s,
+          resourceHub: {
+            ...s.resourceHub,
+            links: s.resourceHub.links.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+          },
+        })),
+
+      removeResourceLink: (id) =>
+        setState((s) => ({
+          ...s,
+          resourceHub: { ...s.resourceHub, links: s.resourceHub.links.filter((l) => l.id !== id) },
+        })),
+
       completeSetup: () =>
         setState((s) => ({
           ...s,
@@ -397,6 +526,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           discountRules: DEFAULT_DISCOUNT_RULES,
           customQuotes: [],
           gallery: DEFAULT_GALLERY,
+          resourceHub: DEFAULT_RESOURCE_HUB,
           onboarding: DEFAULT_ONBOARDING,
         }),
     }),

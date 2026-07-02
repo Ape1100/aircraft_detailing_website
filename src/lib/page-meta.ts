@@ -49,6 +49,14 @@ export const ROUTE_META: Record<string, RouteMeta> = {
     description:
       "Create your Brightwork client account to track aircraft detailing service requests, view reports, and manage invoices online.",
   },
+  "/forgot-password": {
+    title: "Reset Your Password",
+    description: "Request a password reset link for your Brightwork client or admin account.",
+  },
+  "/reset-password": {
+    title: "Set a New Password",
+    description: "Choose a new password for your Brightwork client or admin account.",
+  },
 };
 
 export function buildFullTitle(meta: RouteMeta): string {

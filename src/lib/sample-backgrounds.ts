@@ -11,10 +11,16 @@ export interface SampleBackground {
 /** Default hero — Gulfstream on the ramp at Aspen/Pitkin County Airport. */
 export const DEFAULT_SAMPLE_ID = "executive-jet-ramp";
 
-const HD_PARAMS = "auto=format&fit=crop&w=2560&q=90";
+const BASE_PARAMS = "auto=format&fit=crop&q=90";
 
-export function buildBackgroundUrl(photoPath: string): string {
-  return `https://images.unsplash.com/${photoPath}?${HD_PARAMS}`;
+/** Mobile viewports don't need the same pixel width as a desktop hero —
+ * this keeps the same Unsplash photo but shrinks the download for the
+ * devices least able to afford a ~150-200KB image before first paint. */
+export const MOBILE_BACKGROUND_WIDTH = 1200;
+export const DESKTOP_BACKGROUND_WIDTH = 2560;
+
+export function buildBackgroundUrl(photoPath: string, width: number = DESKTOP_BACKGROUND_WIDTH): string {
+  return `https://images.unsplash.com/${photoPath}?${BASE_PARAMS}&w=${width}`;
 }
 
 export const SAMPLE_BACKGROUNDS: SampleBackground[] = [
@@ -64,6 +70,21 @@ export function getSampleBackgroundUrl(id: string | null): string | null {
   const sample = SAMPLE_BACKGROUNDS.find((bg) => bg.id === id);
   if (!sample) return null;
   return buildBackgroundUrl(sample.photoPath);
+}
+
+export interface ResponsiveBackgroundUrls {
+  mobile: string;
+  desktop: string;
+}
+
+export function getResponsiveSampleBackgroundUrls(id: string | null): ResponsiveBackgroundUrls | null {
+  if (!id) return null;
+  const sample = SAMPLE_BACKGROUNDS.find((bg) => bg.id === id);
+  if (!sample) return null;
+  return {
+    mobile: buildBackgroundUrl(sample.photoPath, MOBILE_BACKGROUND_WIDTH),
+    desktop: buildBackgroundUrl(sample.photoPath, DESKTOP_BACKGROUND_WIDTH),
+  };
 }
 
 export const DEFAULT_HERO_BACKGROUND_URL = buildBackgroundUrl(

@@ -1,5 +1,5 @@
 import { Seo } from "@/components/Seo";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,21 @@ import { useAuth } from "@/lib/auth-provider";
 export default function Login() {
   const navigate = useNavigate();
   const { businessSettings } = useSettings();
-  const { signIn } = useAuth();
+  const { signIn, session, profile, loading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isAdminTab, setIsAdminTab] = useState(false);
+
+  useEffect(() => {
+    // Clicking a signup-confirmation or password-recovery link lands here
+    // with an already-established session (supabase-js parses the URL
+    // hash before this page even renders) — without this, a freshly
+    // confirmed user would just see the login form despite already being
+    // signed in. Wait for `loading` to clear so `profile` has had a chance
+    // to load before deciding where to send them.
+    if (!loading && session) {
+      navigate(profile?.role === "admin" ? "/admin/dashboard" : "/portal/dashboard");
+    }
+  }, [loading, session, profile, navigate]);
 
   return (
     <BrandBackdrop background={businessSettings.background} className="flex min-h-screen items-center justify-center px-6 py-16">
@@ -67,6 +79,9 @@ export default function Login() {
                 <div>
                   <Label htmlFor="login-password">Password</Label>
                   <Input id="login-password" type="password" required placeholder="••••••••" />
+                  <Link to="/forgot-password" className="mt-1 inline-block text-sm text-amberDark hover:underline">
+                    Forgot password?
+                  </Link>
                 </div>
                 <Button type="submit" variant="amber" className="w-full">
                   Sign in to Client Portal
@@ -106,6 +121,9 @@ export default function Login() {
                 <div>
                   <Label htmlFor="admin-password">Password</Label>
                   <Input id="admin-password" type="password" required placeholder="••••••••" />
+                  <Link to="/forgot-password" className="mt-1 inline-block text-sm text-amberDark hover:underline">
+                    Forgot password?
+                  </Link>
                 </div>
                 <Button type="submit" className="w-full">
                   Sign in to Admin Portal

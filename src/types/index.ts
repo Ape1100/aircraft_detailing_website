@@ -240,6 +240,26 @@ export interface GallerySettings {
   photos: GalleryPhotoPair[];
 }
 
+export type ResourceLinkCategory = "forum" | "affiliate";
+
+export interface ResourceLink {
+  id: string;
+  title: string;
+  url: string;
+  description: string;
+  category: ResourceLinkCategory;
+  /** Only meaningful for "affiliate" — lets the admin UI flag which of the
+   * affiliate links are still placeholder storefront URLs vs. the owner's
+   * real, signed-up tracking links. */
+  isLiveAffiliateLink?: boolean;
+  active: boolean;
+}
+
+export interface ResourceHubSettings {
+  enabled: boolean;
+  links: ResourceLink[];
+}
+
 export interface OnboardingState {
   setupCompleted: boolean;
   tourDismissed: boolean;
@@ -375,3 +395,6 @@ export const PRICING_DISCLAIMER =
 
 export const ESTIMATE_DISCLAIMER =
   "This estimate is based on the information provided and is not a final quotation. Final pricing may change following an on-site inspection.";
+
+export const AFFILIATE_DISCLOSURE =
+  "Some links below are affiliate links — we may earn a commission at no extra cost to you.";

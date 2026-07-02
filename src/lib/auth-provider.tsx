@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { usePostHog } from "posthog-js/react";
 import { supabase } from "./supabase-client";
 import type { ClientProfile } from "@/types";
 
@@ -15,6 +16,8 @@ interface AuthContextValue {
     password: string
   ) => Promise<{ profile: ClientProfile | null; needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -64,9 +67,30 @@ async function loadProfile(userId: string): Promise<ClientProfile | null> {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const posthog = usePostHog();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const trackAuthFailure = (
+    flow: "sign_in" | "sign_up" | "reset_password" | "update_password",
+    error: unknown,
+    email?: string
+  ) => {
+    const errorMessage = error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+    const errorCode =
+      typeof error === "object" && error !== null && "code" in error && typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : undefined;
+
+    posthog?.capture("auth_password_error", {
+      flow,
+      error_code: errorCode ?? "unknown",
+      error_message: errorMessage,
+      email_domain: email?.split("@")[1] ?? null,
+      source: "auth_provider",
+    });
+  };
 
   useEffect(() => {
     async function init() {
@@ -123,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
 
         if (error) {
+          trackAuthFailure("sign_in", error, email);
           throw error;
         }
 
@@ -150,7 +175,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           supabase.auth.signUp({
             email,
             password,
-            options: { data: { name, company: company || null } },
+            options: {
+              data: { name, company: company || null },
+              // Without this, Supabase falls back to the project's
+              // dashboard-configured Site URL for the confirmation link —
+              // which is whatever it was last set to (often a stale
+              // localhost dev value), regardless of where signup actually
+              // happened. Pinning it to the real origin keeps confirmation
+              // links working in dev and prod without depending on
+              // dashboard state staying in sync.
+              emailRedirectTo: `${window.location.origin}/login`,
+            },
           }),
           { data: { user: null, session: null }, error: timeoutError("Sign-up") } as Awaited<
             ReturnType<typeof supabase.auth.signUp>
@@ -158,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
 
         if (error) {
+          trackAuthFailure("sign_up", error, email);
           throw error;
         }
 
@@ -184,6 +220,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await withTimeout(supabase.auth.signOut(), { error: null });
         setProfile(null);
         setSession(null);
+      },
+
+      sendPasswordReset: async (email) => {
+        const { error } = await withTimeout(
+          supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`,
+          }),
+          { data: {}, error: timeoutError("Password reset request") } as unknown as Awaited<
+            ReturnType<typeof supabase.auth.resetPasswordForEmail>
+          >
+        );
+
+        if (error) {
+          trackAuthFailure("reset_password", error, email);
+          throw error;
+        }
+      },
+
+      updatePassword: async (newPassword) => {
+        const { error } = await withTimeout(
+          supabase.auth.updateUser({ password: newPassword }),
+          { data: { user: null }, error: timeoutError("Password update") } as Awaited<
+            ReturnType<typeof supabase.auth.updateUser>
+          >
+        );
+
+        if (error) {
+          trackAuthFailure("update_password", error);
+          throw error;
+        }
       },
     }),
     [profile, session, loading]

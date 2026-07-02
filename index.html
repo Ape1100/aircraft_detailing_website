@@ -20,10 +20,18 @@
     <meta property="og:image" content="https://images.unsplash.com/photo-1734750358398-917f1da67c1f?auto=format&fit=crop&w=1200&q=80" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+    <!-- Responsive preload matching BrandBackdrop's mobile (w=1200, shown
+         below Tailwind's md breakpoint) / desktop (w=2560) split — keep the
+         widths and breakpoint here in sync with src/lib/sample-backgrounds.ts
+         and src/components/layout/BrandBackdrop.tsx. Without imagesrcset,
+         every visitor (including mobile) would preload the full desktop
+         image regardless of which one their CSS actually requests. -->
     <link
       rel="preload"
       as="image"
       href="https://images.unsplash.com/photo-1734750358398-917f1da67c1f?auto=format&fit=crop&w=2560&q=90"
+      imagesrcset="https://images.unsplash.com/photo-1734750358398-917f1da67c1f?auto=format&fit=crop&q=90&w=1200 1200w, https://images.unsplash.com/photo-1734750358398-917f1da67c1f?auto=format&fit=crop&q=90&w=2560 2560w"
+      imagesizes="(max-width: 767px) 1200px, 2560px"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
